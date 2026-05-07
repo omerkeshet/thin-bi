@@ -101,6 +101,83 @@ def _render_diagnostics() -> None:
                     st.success("Connected ✅")
                     st.json(info)
 
+        st.divider()
+        st.caption("Schema inspection (temporary, step 3a)")
+
+        table_fqn = st.text_input(
+            "Table to inspect",
+            value="PUBLIC.ANNOTATIONS",
+            key="diag_table_fqn",
+            help="Fully-qualified or schema-qualified table name.",
+        )
+
+        if st.button("Describe table", key="diag_describe"):
+            from engine.snowflake_client import get_connection
+            try:
+                conn = get_connection()
+                try:
+                    cur = conn.cursor()
+                    try:
+                        cur.execute(f"DESCRIBE TABLE {table_fqn}")
+                        cols = [d[0] for d in cur.description]
+                        rows = cur.fetchall()
+                    finally:
+                        cur.close()
+                finally:
+                    conn.close()
+            except Exception as e:
+                st.error(f"DESCRIBE failed: {type(e).__name__}: {e}")
+            else:
+                import pandas as pd
+                st.success(f"{len(rows)} columns")
+                st.dataframe(
+                    pd.DataFrame(rows, columns=cols),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
+        if st.button("Sample rows (5)", key="diag_sample"):
+            from engine.snowflake_client import get_connection
+            try:
+                conn = get_connection()
+                try:
+                    cur = conn.cursor()
+                    try:
+                        cur.execute(f"SELECT * FROM {table_fqn} LIMIT 5")
+                        cols = [d[0] for d in cur.description]
+                        rows = cur.fetchall()
+                    finally:
+                        cur.close()
+                finally:
+                    conn.close()
+            except Exception as e:
+                st.error(f"Sample failed: {type(e).__name__}: {e}")
+            else:
+                import pandas as pd
+                st.dataframe(
+                    pd.DataFrame(rows, columns=cols),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
+        if st.button("Row count", key="diag_count"):
+            from engine.snowflake_client import get_connection
+            try:
+                conn = get_connection()
+                try:
+                    cur = conn.cursor()
+                    try:
+                        cur.execute(f"SELECT COUNT(*) FROM {table_fqn}")
+                        (count,) = cur.fetchone()
+                    finally:
+                        cur.close()
+                finally:
+                    conn.close()
+            except Exception as e:
+                st.error(f"Count failed: {type(e).__name__}: {e}")
+            else:
+                st.metric("Rows", f"{count:,}")
+
 
 # ---------------------------------------------------------------------------
 # Main panel — dashboard placeholder (real renderer arrives in step 5)
