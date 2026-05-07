@@ -12,7 +12,21 @@
           "y": "plays",
           "aggfunc": "sum",
           "series": "site",
-          "barmode": "stack"
+          "barmode": "stack",
+          "stack_order": "sum_desc"
+        }
+      },
+      {
+        "type": "bar",
+        "title": "Natives + Bumpers per day by site",
+        "transform": {
+          "x": "date",
+          "y_expr": { "sum": ["natives", "bumpers"] },
+          "y_label": "natives_plus_bumpers",
+          "aggfunc": "sum",
+          "series": "site",
+          "barmode": "stack",
+          "stack_order": "sum_desc"
         }
       }
     ]
