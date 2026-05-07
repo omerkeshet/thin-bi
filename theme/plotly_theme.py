@@ -1,12 +1,5 @@
 """
 Plotly theme for the Thin BI Portal.
-
-Exposes:
-- THEME_NAME: the registered Plotly template name to set as default.
-- PALETTE: ordered list of categorical colors for series (sites, etc.).
-- format_number(n): "1234567" → "1.23M".
-- apply_chart_polish(fig, *, x_is_date=False): per-chart finishing touches
-  (number-formatted axis ticks, unified hover, legend placement, margins).
 """
 
 from __future__ import annotations
@@ -17,9 +10,6 @@ import plotly.io as pio
 
 THEME_NAME = "thinbi"
 
-# A deliberate palette — deeper, more saturated than Plotly defaults,
-# designed to read well on both light and dark backgrounds and to
-# remain distinguishable up to ~10 series.
 PALETTE: list[str] = [
     "#2E5BFF",  # blue
     "#00C2A8",  # teal
@@ -33,12 +23,11 @@ PALETTE: list[str] = [
     "#64748B",  # slate
 ]
 
-# Neutral grays for axes, gridlines, text. Tuned for a light page.
-_INK = "#0F172A"          # primary text (slate-900)
-_INK_SOFT = "#475569"     # secondary text (slate-600)
-_GRID = "#E2E8F0"         # gridline (slate-200)
-_AXIS = "#CBD5E1"         # axis line (slate-300)
-_PAPER = "rgba(0,0,0,0)"  # transparent so Streamlit's bg shows through
+_INK = "#0F172A"
+_INK_SOFT = "#475569"
+_GRID = "#E2E8F0"
+_AXIS = "#CBD5E1"
+_PAPER = "rgba(0,0,0,0)"
 
 
 def _build_template() -> go.layout.Template:
@@ -53,15 +42,12 @@ def _build_template() -> go.layout.Template:
                 size=13,
                 color=_INK,
             ),
-            title=dict(
-                font=dict(size=15, color=_INK, family="Inter, sans-serif"),
-                x=0.0,
-                xanchor="left",
-                pad=dict(t=4, b=8),
-            ),
             paper_bgcolor=_PAPER,
             plot_bgcolor=_PAPER,
-            margin=dict(l=12, r=12, t=44, b=12),
+            # No top margin needed for a title — title is rendered as HTML
+            # above the chart by the renderer. Bottom margin leaves room
+            # for the horizontal legend.
+            margin=dict(l=8, r=8, t=8, b=56),
             xaxis=dict(
                 showgrid=False,
                 showline=True,
@@ -71,8 +57,9 @@ def _build_template() -> go.layout.Template:
                 tickcolor=_AXIS,
                 ticklen=4,
                 tickfont=dict(color=_INK_SOFT, size=12),
-                title=dict(font=dict(color=_INK_SOFT, size=12)),
+                title=dict(text="", font=dict(color=_INK_SOFT, size=12)),
                 zeroline=False,
+                automargin=True,
             ),
             yaxis=dict(
                 showgrid=True,
@@ -81,19 +68,19 @@ def _build_template() -> go.layout.Template:
                 showline=False,
                 ticks="",
                 tickfont=dict(color=_INK_SOFT, size=12),
-                title=dict(font=dict(color=_INK_SOFT, size=12)),
+                title=dict(text="", font=dict(color=_INK_SOFT, size=12)),
                 zeroline=False,
+                automargin=True,
             ),
             legend=dict(
                 orientation="h",
-                yanchor="bottom",
-                y=1.02,
-                xanchor="left",
-                x=0.0,
+                yanchor="top",
+                y=-0.18,
+                xanchor="center",
+                x=0.5,
                 font=dict(size=12, color=_INK_SOFT),
                 bgcolor="rgba(0,0,0,0)",
-                title=dict(text=""),  # legend title repeats the color column;
-                                       # we suppress it for a cleaner look.
+                title=dict(text=""),
             ),
             hoverlabel=dict(
                 bgcolor="white",
@@ -107,16 +94,11 @@ def _build_template() -> go.layout.Template:
 
 
 def register_theme() -> None:
-    """Register and activate the theme as Plotly's default template."""
     pio.templates[THEME_NAME] = _build_template()
     pio.templates.default = THEME_NAME
 
 
 def format_number(n: float) -> str:
-    """
-    Compact human-readable number: 1234 → '1.23K', 1_234_567 → '1.23M'.
-    Used in hover tooltips and KPI tiles.
-    """
     try:
         n = float(n)
     except (TypeError, ValueError):
@@ -135,17 +117,15 @@ def format_number(n: float) -> str:
 
 def apply_chart_polish(fig, *, x_is_date: bool = False) -> None:
     """
-    Per-chart finishing: numeric ticks formatted as K/M/B, unified hover
-    for time-series, smart x-axis ticks for dates, tight category gaps.
-    Call after constructing a px.bar / px.line / etc.
+    Per-chart finishing touches. Call after constructing px.bar/etc.
+    The chart title is NOT set here — the renderer draws it as HTML
+    above the chart so the Plotly canvas has the full vertical space.
     """
-    # Tickformat 's' uses SI prefixes (k, M, G). Plotly's `~s` strips
-    # trailing zeros, e.g. 1.0M → 1M.
     fig.update_yaxes(tickformat="~s")
 
     if x_is_date:
         fig.update_xaxes(
-            tickformat="%b %d",       # e.g. "May 07"
+            tickformat="%b %d",
             ticks="outside",
             tickangle=0,
             showgrid=False,
@@ -154,7 +134,4 @@ def apply_chart_polish(fig, *, x_is_date: bool = False) -> None:
     else:
         fig.update_layout(hovermode="closest")
 
-    # Hover formatting: thousand separators on the y value.
-    # Most px.* charts already wire hovertemplate; we override yaxis hoverformat
-    # for cases that fall back to defaults.
     fig.update_layout(yaxis=dict(hoverformat=",.0f"))
