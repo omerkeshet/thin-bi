@@ -94,6 +94,41 @@ def _render_diagnostics() -> None:
                     st.success("Connected ✅")
                     st.json(info)
 
+        st.divider()
+        st.caption("Query size probe")
+
+        if st.button("Probe Shorts query size", key="diag_probe_shorts"):
+            from engine.snowflake_client import get_connection
+            try:
+                conn = get_connection()
+                try:
+                    cur = conn.cursor()
+                    try:
+                        cur.execute("""
+                            SELECT
+                                COUNT(*) AS row_count,
+                                COUNT(DISTINCT "site") AS distinct_sites,
+                                MIN(CAST("date" AS DATE)) AS min_date,
+                                MAX(CAST("date" AS DATE)) AS max_date
+                            FROM POC_DATABASE."domo"."shorts_all_sites_agg"
+                            WHERE CAST("date" AS DATE) >= DATEADD(DAY, -7, CURRENT_DATE())
+                        """)
+                        row = cur.fetchone()
+                    finally:
+                        cur.close()
+                finally:
+                    conn.close()
+            except Exception as e:
+                st.error(f"Probe failed: {type(e).__name__}: {e}")
+            else:
+                st.success("Probed ✅")
+                st.json({
+                    "row_count": row[0],
+                    "distinct_sites": row[1],
+                    "min_date": str(row[2]),
+                    "max_date": str(row[3]),
+                })
+
 
 # ---------------------------------------------------------------------------
 # Main panel
