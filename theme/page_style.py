@@ -5,6 +5,9 @@ filters, branded logo treatment.
 
 from __future__ import annotations
 
+import base64
+from pathlib import Path
+
 import streamlit as st
 
 
@@ -90,55 +93,36 @@ header[data-testid="stHeader"] { background: transparent; }
         filter: drop-shadow(0 0 0 rgba(46, 91, 255, 0));
     }
     50% {
-        transform: scale(1.04);
-        filter: drop-shadow(0 0 8px rgba(46, 91, 255, 0.25));
+        transform: scale(1.03);
+        filter: drop-shadow(0 0 12px rgba(46, 91, 255, 0.22));
     }
 }
 
-.tbi-logo {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
+.tbi-logo-img {
+    display: block;
+    width: 100%;
+    height: auto;
     animation: tbi-logo-pulse 2.6s ease-in-out infinite;
     transform-origin: center center;
     will-change: transform, filter;
 }
 
-.tbi-logo svg, .tbi-logo img {
-    display: block;
-    width: 100%;
-    height: 100%;
-}
-
-/* Sidebar logo block */
+/* Sidebar logo block — wide horizontal lockup, fits sidebar width */
 .tbi-sidebar-brand {
-    display: flex;
-    align-items: center;
-    gap: 0.65rem;
     margin: 0.25rem 0 1.5rem 0;
-}
-.tbi-sidebar-brand .tbi-logo {
-    width: 32px;
-    height: 32px;
-    flex-shrink: 0;
-}
-.tbi-sidebar-brand .tbi-brand-name {
-    font-size: 1.2rem;
-    font-weight: 700;
-    color: #0F172A;
-    letter-spacing: -0.02em;
-    line-height: 1;
+    width: 100%;
 }
 
-/* Landing logo — bigger, more presence */
+/* Landing logo — large hero treatment */
 .tbi-landing-logo {
     display: flex;
     justify-content: center;
-    margin: 1.5rem 0 2rem 0;
+    margin: 1.5rem 0 1.5rem 0;
 }
-.tbi-landing-logo .tbi-logo {
-    width: 96px;
-    height: 96px;
+.tbi-landing-logo .tbi-logo-img {
+    max-width: 540px;
+    width: 100%;
+    height: auto;
 }
 
 /* ---------- Chart card ---------- */
@@ -441,31 +425,52 @@ def apply_page_style() -> None:
     st.markdown(_GLOBAL_CSS, unsafe_allow_html=True)
 
 
-def render_sidebar_logo(logo_svg: str | None, brand_name: str) -> None:
-    """Render the logo + wordmark at the top of the sidebar."""
-    if logo_svg:
-        block = (
-            f'<div class="tbi-sidebar-brand">'
-            f'<div class="tbi-logo">{logo_svg}</div>'
-            f'<div class="tbi-brand-name">{brand_name}</div>'
-            f"</div>"
-        )
-    else:
-        # Fallback: just a styled wordmark.
-        block = (
-            f'<div class="tbi-sidebar-brand">'
-            f'<div class="tbi-brand-name">{brand_name}</div>'
-            f"</div>"
-        )
-    st.sidebar.markdown(block, unsafe_allow_html=True)
+def _logo_data_uri(logo_path: Path) -> str | None:
+    """Read the SVG and return a base64-encoded data URI for use in <img src=...>.
+
+    Embedding as a data URI (rather than serving via Streamlit's static file
+    server) keeps things self-contained and avoids a separate HTTP fetch.
+    """
+    try:
+        raw = logo_path.read_bytes()
+    except OSError:
+        return None
+    encoded = base64.b64encode(raw).decode("ascii")
+    return f"data:image/svg+xml;base64,{encoded}"
 
 
-def render_landing_logo(logo_svg: str | None) -> None:
-    """Render a larger, prominent version of the logo on the landing screen."""
-    if not logo_svg:
+def render_sidebar_logo(logo_path: Path | None, brand_name: str) -> None:
+    """Render the logo at the top of the sidebar."""
+    if logo_path and logo_path.is_file():
+        uri = _logo_data_uri(logo_path)
+        if uri:
+            st.sidebar.markdown(
+                f'<div class="tbi-sidebar-brand">'
+                f'<img class="tbi-logo-img" src="{uri}" alt="{brand_name}"/>'
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+            return
+    # Fallback: text wordmark.
+    st.sidebar.markdown(
+        f'<div class="tbi-sidebar-brand">'
+        f'<div style="font-size:1.2rem;font-weight:700;color:#0F172A;">{brand_name}</div>'
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def render_landing_logo(logo_path: Path | None) -> None:
+    """Render a larger version of the logo on the landing screen."""
+    if not (logo_path and logo_path.is_file()):
+        return
+    uri = _logo_data_uri(logo_path)
+    if not uri:
         return
     st.markdown(
-        f'<div class="tbi-landing-logo"><div class="tbi-logo">{logo_svg}</div></div>',
+        f'<div class="tbi-landing-logo">'
+        f'<img class="tbi-logo-img" src="{uri}" alt="OmerBI"/>'
+        f"</div>",
         unsafe_allow_html=True,
     )
 
