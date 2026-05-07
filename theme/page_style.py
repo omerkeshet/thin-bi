@@ -442,8 +442,6 @@ header[data-testid="stHeader"] { background: transparent; }
 }
 </style>
 """
-</style>
-"""
 
 
 def apply_page_style() -> None:
