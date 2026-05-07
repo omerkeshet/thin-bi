@@ -8,6 +8,7 @@ from pathlib import Path
 
 import streamlit as st
 
+from engine.auth import render_logout_button, require_auth
 from engine.dashboard_registry import (
     Dashboard,
     Department,
@@ -48,6 +49,14 @@ register_theme()
 
 
 # ---------------------------------------------------------------------------
+# Auth gate — runs before anything else
+# ---------------------------------------------------------------------------
+
+if not require_auth():
+    st.stop()
+
+
+# ---------------------------------------------------------------------------
 # Sidebar — dashboard navigation
 # ---------------------------------------------------------------------------
 
@@ -63,7 +72,7 @@ def _render_sidebar(departments: tuple[Department, ...]) -> Dashboard | None:
             "Add folders under `dashboards/<department>/<name>/` "
             "with a `config.json` and `query.sql`."
         )
-        _render_diagnostics()
+        _render_sidebar_footer()
         return None
 
     selected_key = st.session_state.get(SELECTED_KEY)
@@ -89,11 +98,12 @@ def _render_sidebar(departments: tuple[Department, ...]) -> Dashboard | None:
         if selected is None:
             del st.session_state[SELECTED_KEY]
 
-    _render_diagnostics()
+    _render_sidebar_footer()
     return selected
 
 
-def _render_diagnostics() -> None:
+def _render_sidebar_footer() -> None:
+    """Diagnostics + sign out, anchored at the bottom of the sidebar."""
     with st.sidebar.expander("🔧 Diagnostics", expanded=False):
         if st.button("Test Snowflake connection", key="diag_test_conn"):
             with st.spinner("Connecting..."):
@@ -104,6 +114,9 @@ def _render_diagnostics() -> None:
                 else:
                     st.success("Connected ✅")
                     st.json(info)
+
+    st.sidebar.markdown("---")
+    render_logout_button()
 
 
 # ---------------------------------------------------------------------------
