@@ -1,6 +1,7 @@
 SELECT
     CAST("date" AS DATE) AS "date",
     "site",
+    "play_source",
     "plays",
     "natives",
     "bumpers"
