@@ -1,0 +1,20 @@
+{
+  "title": "Shorts Performance",
+  "department_title": "Content",
+  "description": "Daily Shorts plays across sites — last 7 days.",
+  "layout": [
+    [
+      {
+        "type": "bar",
+        "title": "Plays per day by site",
+        "transform": {
+          "x": "date",
+          "y": "plays",
+          "aggfunc": "sum",
+          "series": "site",
+          "barmode": "group"
+        }
+      }
+    ]
+  ]
+}
