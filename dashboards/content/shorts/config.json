@@ -1,7 +1,11 @@
 {
   "title": "Shorts Performance",
   "department_title": "Content",
-  "description": "Daily Shorts plays across sites — last 7 days.",
+  "description": "Daily Shorts plays across sites.",
+  "filters": [
+    { "type": "date_range", "column": "date", "label": "Date range" },
+    { "type": "multiselect", "column": "site", "label": "Site", "order": ["v1", "mako", "n12"] }
+  ],
   "layout": [
     [
       {
@@ -33,7 +37,7 @@
     [
       {
         "type": "shorts_funnel",
-        "title": "Shorts funnel — last 7 days",
+        "title": "Shorts funnel",
         "subtitle": "From all plays through to impressions, per site"
       }
     ]
