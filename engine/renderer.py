@@ -72,4 +72,171 @@ def render_dashboard(dashboard: Dashboard) -> None:
 # Chart factory
 # ---------------------------------------------------------------------------
 
-def _render_viz(d
+def _render_viz(df: pd.DataFrame, viz: dict[str, Any]) -> None:
+    """Dispatch a single viz definition to the right chart renderer."""
+    viz_type = (viz.get("type") or "").lower()
+    title = viz.get("title", "")
+
+    try:
+        if viz_type == "bar":
+            _render_bar(df, viz, title)
+        else:
+            st.warning(f"Unknown viz type: `{viz_type}` (viz: {title!r})")
+    except Exception as e:
+        st.error(f"Failed to render viz {title!r}: {type(e).__name__}: {e}")
+
+
+def _resolve_measure(
+    df: pd.DataFrame,
+    transform: dict[str, Any],
+    title: str,
+) -> tuple[pd.Series, str] | None:
+    """
+    Return (measure_series, measure_label) based on transform.y or transform.y_expr.
+    """
+    y_expr = transform.get("y_expr")
+    if y_expr:
+        if isinstance(y_expr, dict) and "sum" in y_expr:
+            cols = y_expr["sum"]
+            if not isinstance(cols, list) or not cols:
+                st.warning(f"Bar viz {title!r}: `y_expr.sum` must be a non-empty list.")
+                return None
+            missing = [c for c in cols if c not in df.columns]
+            if missing:
+                st.warning(
+                    f"Bar viz {title!r}: y_expr columns not found: {missing}. "
+                    f"Available: {list(df.columns)}"
+                )
+                return None
+            label = transform.get("y_label") or " + ".join(cols)
+            series = df[cols].sum(axis=1)
+            series.name = label
+            return series, label
+        st.warning(f"Bar viz {title!r}: unsupported `y_expr` shape: {y_expr}")
+        return None
+
+    y = transform.get("y")
+    if not y:
+        st.warning(f"Bar viz {title!r}: requires `transform.y` or `transform.y_expr`.")
+        return None
+    if y not in df.columns:
+        st.warning(
+            f"Bar viz {title!r}: column `{y}` not found. "
+            f"Available: {list(df.columns)}"
+        )
+        return None
+    label = transform.get("y_label") or y
+    return df[y], label
+
+
+def _is_date_like(series: pd.Series) -> bool:
+    if pd.api.types.is_datetime64_any_dtype(series):
+        return True
+    # If pandas left it as object/str (Snowflake DATE often comes as date objects),
+    # peek at the first non-null value.
+    sample = series.dropna().head(1)
+    if sample.empty:
+        return False
+    val = sample.iloc[0]
+    return hasattr(val, "year") and hasattr(val, "month") and hasattr(val, "day")
+
+
+def _render_bar(df: pd.DataFrame, viz: dict[str, Any], title: str) -> None:
+    """
+    Bar chart.
+
+    transform fields:
+      x:           column on the x-axis (required)
+      y:           column to aggregate, OR
+      y_expr:      {"sum": ["col_a", "col_b"]} for a derived measure
+      y_label:     optional display name for the measure
+      aggfunc:     pandas agg function name applied AFTER the y/y_expr step
+      series:      optional column to break bars by (color)
+      barmode:     "group" (default) or "stack"
+      stack_order: optional, "sum_desc"
+    """
+    transform = viz.get("transform") or {}
+    x = transform.get("x")
+    aggfunc = transform.get("aggfunc", "sum")
+    series = transform.get("series")
+    barmode = transform.get("barmode", "group")
+    stack_order = transform.get("stack_order")
+
+    if not x:
+        st.warning(f"Bar viz {title!r}: requires `transform.x`.")
+        return
+    if x not in df.columns:
+        st.warning(
+            f"Bar viz {title!r}: column `{x}` not found. "
+            f"Available: {list(df.columns)}"
+        )
+        return
+    if series and series not in df.columns:
+        st.warning(
+            f"Bar viz {title!r}: series column `{series}` not found. "
+            f"Available: {list(df.columns)}"
+        )
+        return
+
+    measure = _resolve_measure(df, transform, title)
+    if measure is None:
+        return
+    measure_series, measure_label = measure
+
+    work = pd.DataFrame({x: df[x].values})
+    if series:
+        work[series] = df[series].values
+    work[measure_label] = measure_series.values
+
+    group_cols = [x] + ([series] if series else [])
+    agg = (
+        work.groupby(group_cols, dropna=False)[measure_label]
+        .agg(aggfunc)
+        .reset_index()
+    )
+
+    category_orders: dict[str, list] | None = None
+    if series and stack_order == "sum_desc":
+        totals = (
+            agg.groupby(series, dropna=False)[measure_label]
+            .sum()
+            .sort_values(ascending=False)
+        )
+        category_orders = {series: totals.index.tolist()}
+
+    agg = agg.sort_values(by=group_cols)
+
+    x_is_date = _is_date_like(agg[x])
+
+    fig = px.bar(
+        agg,
+        x=x,
+        y=measure_label,
+        color=series if series else None,
+        barmode=barmode if series else "relative",
+        title=title or None,
+        category_orders=category_orders,
+    )
+
+    # Branded hover template — same shape across all bars.
+    if series:
+        fig.update_traces(
+            hovertemplate=(
+                f"<b>%{{fullData.name}}</b><br>"
+                f"{x}: %{{x}}<br>"
+                f"{measure_label}: %{{y:,.0f}}"
+                "<extra></extra>"
+            )
+        )
+    else:
+        fig.update_traces(
+            hovertemplate=(
+                f"{x}: %{{x}}<br>"
+                f"{measure_label}: %{{y:,.0f}}"
+                "<extra></extra>"
+            )
+        )
+
+    apply_chart_polish(fig, x_is_date=x_is_date)
+
+    st.plotly_chart(fig, use_container_width=True)
