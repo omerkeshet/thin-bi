@@ -1,36 +1,27 @@
-# Secrets — NEVER commit
-.streamlit/secrets.toml
-*.p8
-*.pem
-*.key
-
 # Python
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
-
-# Virtual environments
-.venv/
 venv/
+.venv/
 env/
-ENV/
+.env
 
-# IDEs
-.vscode/
+# Streamlit secrets — NEVER commit
+.streamlit/secrets.toml
+
+# IDE
 .idea/
+.vscode/
 *.swp
-*.swo
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Streamlit
-.streamlit/cache/
-
-# Misc
-*.log
-.pytest_cache/
-.coverage
+# Build artifacts
+*.egg-info/
+build/
+dist/
