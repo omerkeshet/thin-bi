@@ -13,6 +13,7 @@ import streamlit as st
 
 from engine.dashboard_registry import Dashboard
 from engine.data_loader import load_dashboard_data
+from engine.filters import render_filters
 from engine.funnel import compute_shorts_funnel, FunnelStep
 from theme.plotly_theme import apply_chart_polish, format_number
 
@@ -21,7 +22,7 @@ CHART_HEIGHT = 380
 
 
 # ---------------------------------------------------------------------------
-# Site styling (used by bar charts AND the funnel for visual consistency)
+# Site styling
 # ---------------------------------------------------------------------------
 
 SITE_BRAND_COLORS: dict[str, str] = {
@@ -30,7 +31,7 @@ SITE_BRAND_COLORS: dict[str, str] = {
     "v1": "#e84b2b",
 }
 SITE_TEXT_COLORS: dict[str, str] = {
-    "mako": "#1a1a1a",  # dark text on yellow
+    "mako": "#1a1a1a",
     "n12": "#ffffff",
     "v1": "#ffffff",
 }
@@ -38,7 +39,6 @@ SITE_ORDER = ["v1", "mako", "n12"]
 
 
 def _site_color_map(sites: list[str]) -> dict[str, str]:
-    """Build a color map keyed by the actual site values present in the data."""
     out: dict[str, str] = {}
     for s in sites:
         key = str(s).strip().lower()
@@ -52,8 +52,6 @@ def _site_text_color(site: str) -> str:
 
 
 def _site_order_for(values: list[str]) -> list[str]:
-    """Return the unique site values in the canonical order, with any
-    unknown sites appended at the end alphabetically."""
     by_key: dict[str, str] = {}
     for v in values:
         by_key.setdefault(str(v).strip().lower(), str(v))
@@ -90,11 +88,17 @@ def render_dashboard(dashboard: Dashboard) -> None:
         st.info("Query returned no rows.")
         return
 
-    st.caption(f"{len(df):,} rows loaded")
+    # Filters
+    filter_defs = dashboard.config.get("filters") or []
+    df = render_filters(df, filter_defs, dashboard_key=dashboard.key)
+
+    if df.empty:
+        st.info("No data matches the current filter selection.")
+        return
 
     layout = dashboard.config.get("layout") or []
     if not layout:
-        st.warning("No `layout` defined in config.json. Add a `layout` array of viz rows.")
+        st.warning("No `layout` defined in config.json.")
         with st.expander("Raw data preview"):
             st.dataframe(df.head(50), use_container_width=True)
         return
@@ -129,9 +133,8 @@ def _render_viz(df: pd.DataFrame, viz: dict[str, Any]) -> None:
         st.error(f"Failed to render viz {title!r}: {type(e).__name__}: {e}")
 
 
-def _open_card(title: str, subtitle: str = "", *, dark: bool = False) -> None:
-    cls = "tbi-card tbi-card-dark" if dark else "tbi-card"
-    parts = [f'<div class="{cls}">']
+def _open_card(title: str, subtitle: str = "") -> None:
+    parts = ['<div class="tbi-card">']
     if title:
         parts.append(f'<div class="tbi-chart-title">{html.escape(title)}</div>')
     if subtitle:
@@ -178,10 +181,7 @@ def _resolve_measure(
         st.warning(f"Bar viz {title!r}: requires `transform.y` or `transform.y_expr`.")
         return None
     if y not in df.columns:
-        st.warning(
-            f"Bar viz {title!r}: column `{y}` not found. "
-            f"Available: {list(df.columns)}"
-        )
+        st.warning(f"Bar viz {title!r}: column `{y}` not found.")
         return None
     label = transform.get("y_label") or y
     return df[y], label
@@ -215,7 +215,7 @@ def _render_bar(
         st.warning(f"Bar viz {title!r}: requires `transform.x`.")
         return
     if x not in df.columns:
-        st.warning(f"Bar viz {title!r}: column `{x}` not found. Available: {list(df.columns)}")
+        st.warning(f"Bar viz {title!r}: column `{x}` not found.")
         return
     if series and series not in df.columns:
         st.warning(f"Bar viz {title!r}: series column `{series}` not found.")
@@ -238,8 +238,6 @@ def _render_bar(
         .reset_index()
     )
 
-    # Series ordering — site override beats sum_desc for the canonical
-    # site palette we use across the whole dashboard.
     category_orders: dict[str, list] | None = None
     color_map: dict[str, str] | None = None
 
@@ -307,11 +305,9 @@ def _format_pct(current: float, previous: float) -> str:
 
 
 def _render_step_segments(step: FunnelStep) -> str:
-    """Build the inner segmented bar for a single funnel step."""
     if step.total <= 0 or not step.by_site:
         return ""
 
-    # Decide tier class based on width — matches your original logic.
     if step.width_pct <= 40:
         tier_cls = "tier-xs"
     elif step.width_pct <= 55:
@@ -321,7 +317,6 @@ def _render_step_segments(step: FunnelStep) -> str:
     else:
         tier_cls = ""
 
-    # Order sites canonically.
     ordered_sites = _site_order_for(list(step.by_site.keys()))
 
     parts: list[str] = [f'<div class="tbi-segments-row {tier_cls}">']
@@ -376,7 +371,6 @@ def _render_step_html(step: FunnelStep, idx: int) -> str:
 
 
 def _render_connector_html(prev_step: FunnelStep, curr_step: FunnelStep) -> str:
-    """Per-site percentage badges between two steps."""
     sites = _site_order_for(list(set(prev_step.by_site) | set(curr_step.by_site)))
     parts: list[str] = ['<div class="tbi-funnel-connector">']
     any_emitted = False
