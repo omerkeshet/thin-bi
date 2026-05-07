@@ -45,7 +45,7 @@ def _load_logo_svg() -> str | None:
 # Page config + global styling
 # ---------------------------------------------------------------------------
 
-_logo_svg = _load_logo_svg()
+_logo_svg = None
 
 st.set_page_config(
     page_title="OmerBI",
