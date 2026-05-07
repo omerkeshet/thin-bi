@@ -26,26 +26,16 @@ from theme.plotly_theme import register_theme
 
 
 # ---------------------------------------------------------------------------
-# Logo loading
+# Logo
 # ---------------------------------------------------------------------------
 
 _REPO_ROOT = Path(__file__).resolve().parent
 _LOGO_PATH = _REPO_ROOT / "assets" / "logo.svg"
 
 
-def _load_logo_svg() -> str | None:
-    """Read the SVG so we can inline it (enables CSS animation on its parts)."""
-    try:
-        return _LOGO_PATH.read_text(encoding="utf-8")
-    except OSError:
-        return None
-
-
 # ---------------------------------------------------------------------------
 # Page config + global styling
 # ---------------------------------------------------------------------------
-
-_logo_svg = _load_logo_svg()
 
 st.set_page_config(
     page_title="OmerBI",
@@ -65,7 +55,7 @@ SELECTED_KEY = "selected_dashboard_key"
 
 
 def _render_sidebar(departments: tuple[Department, ...]) -> Dashboard | None:
-    render_sidebar_logo(_logo_svg, brand_name="OmerBI")
+    render_sidebar_logo(_LOGO_PATH, brand_name="OmerBI")
 
     if not departments:
         st.sidebar.info(
@@ -122,9 +112,9 @@ def _render_diagnostics() -> None:
 
 def _render_main(dashboard: Dashboard | None) -> None:
     if dashboard is None:
-        render_landing_logo(_logo_svg)
+        render_landing_logo(_LOGO_PATH)
         render_app_header(
-            "OmerBI",
+            "Welcome",
             "Select a dashboard from the sidebar to begin.",
         )
         return
