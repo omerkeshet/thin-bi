@@ -174,7 +174,6 @@ def _render_bar(df: pd.DataFrame, viz: dict[str, Any], title: str) -> None:
         return
     measure_series, measure_label = measure
 
-    # Build a working frame with just what we need.
     work = pd.DataFrame({x: df[x].values})
     if series:
         work[series] = df[series].values
@@ -187,7 +186,6 @@ def _render_bar(df: pd.DataFrame, viz: dict[str, Any], title: str) -> None:
         .reset_index()
     )
 
-    # Determine series order for stacking (Plotly stacks in the legend order).
     category_orders: dict[str, list] | None = None
     if series and stack_order == "sum_desc":
         totals = (
@@ -195,11 +193,8 @@ def _render_bar(df: pd.DataFrame, viz: dict[str, Any], title: str) -> None:
             .sum()
             .sort_values(ascending=False)
         )
-        # Plotly stacks bottom-to-top in the order given. We want the
-        # largest total at the bottom, so pass descending order directly.
         category_orders = {series: totals.index.tolist()}
 
-    # Sort x for a stable axis (matters for date axes especially).
     agg = agg.sort_values(by=group_cols)
 
     fig = px.bar(
@@ -213,4 +208,7 @@ def _render_bar(df: pd.DataFrame, viz: dict[str, Any], title: str) -> None:
     )
     fig.update_layout(
         margin=dict(l=10, r=10, t=40 if title else 10, b=10),
-        legend_title_text=series if series else "
+        legend_title_text=series if series else "",
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
