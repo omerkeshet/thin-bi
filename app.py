@@ -1,8 +1,5 @@
 """
 Thin BI Portal — entry point.
-
-Renders the sidebar dashboard menu and dispatches to the layout renderer
-when a dashboard is selected.
 """
 
 from __future__ import annotations
@@ -17,10 +14,12 @@ from engine.dashboard_registry import (
 )
 from engine.renderer import render_dashboard
 from engine.snowflake_client import test_connection
+from theme.page_style import apply_page_style, render_app_header
+from theme.plotly_theme import register_theme
 
 
 # ---------------------------------------------------------------------------
-# Page config
+# Page config + global styling
 # ---------------------------------------------------------------------------
 
 st.set_page_config(
@@ -29,6 +28,8 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+apply_page_style()
+register_theme()
 
 
 # ---------------------------------------------------------------------------
@@ -39,7 +40,18 @@ SELECTED_KEY = "selected_dashboard_key"
 
 
 def _render_sidebar(departments: tuple[Department, ...]) -> Dashboard | None:
-    st.sidebar.title("📊 Thin BI Portal")
+    st.sidebar.markdown(
+        """
+        <div style="
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #0F172A;
+            letter-spacing: -0.01em;
+            margin-bottom: 1.5rem;
+        ">📊 Thin BI Portal</div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     if not departments:
         st.sidebar.info(
@@ -56,11 +68,7 @@ def _render_sidebar(departments: tuple[Department, ...]) -> Dashboard | None:
         st.sidebar.markdown(f"**{department.title}**")
         for dashboard in department.dashboards:
             is_selected = dashboard.key == selected_key
-            label = (
-                f"▸ {dashboard.dashboard_title}"
-                if is_selected
-                else dashboard.dashboard_title
-            )
+            label = dashboard.dashboard_title
             if st.sidebar.button(
                 label,
                 key=f"nav_{dashboard.key}",
@@ -85,7 +93,7 @@ def _render_sidebar(departments: tuple[Department, ...]) -> Dashboard | None:
 def _render_diagnostics() -> None:
     with st.sidebar.expander("🔧 Diagnostics", expanded=False):
         if st.button("Test Snowflake connection", key="diag_test_conn"):
-            with st.spinner("Connecting to Snowflake..."):
+            with st.spinner("Connecting..."):
                 try:
                     info = test_connection()
                 except Exception as e:
@@ -94,41 +102,6 @@ def _render_diagnostics() -> None:
                     st.success("Connected ✅")
                     st.json(info)
 
-        st.divider()
-        st.caption("Query size probe")
-
-        if st.button("Probe Shorts query size", key="diag_probe_shorts"):
-            from engine.snowflake_client import get_connection
-            try:
-                conn = get_connection()
-                try:
-                    cur = conn.cursor()
-                    try:
-                        cur.execute("""
-                            SELECT
-                                COUNT(*) AS row_count,
-                                COUNT(DISTINCT "site") AS distinct_sites,
-                                MIN(CAST("date" AS DATE)) AS min_date,
-                                MAX(CAST("date" AS DATE)) AS max_date
-                            FROM POC_DATABASE."domo"."shorts_all_sites_agg"
-                            WHERE CAST("date" AS DATE) >= DATEADD(DAY, -7, CURRENT_DATE())
-                        """)
-                        row = cur.fetchone()
-                    finally:
-                        cur.close()
-                finally:
-                    conn.close()
-            except Exception as e:
-                st.error(f"Probe failed: {type(e).__name__}: {e}")
-            else:
-                st.success("Probed ✅")
-                st.json({
-                    "row_count": row[0],
-                    "distinct_sites": row[1],
-                    "min_date": str(row[2]),
-                    "max_date": str(row[3]),
-                })
-
 
 # ---------------------------------------------------------------------------
 # Main panel
@@ -136,11 +109,9 @@ def _render_diagnostics() -> None:
 
 def _render_main(dashboard: Dashboard | None) -> None:
     if dashboard is None:
-        st.title("Thin BI Portal")
-        st.caption("Select a dashboard from the sidebar to begin.")
-        st.info(
-            "No dashboard selected yet. The sidebar lists every dashboard "
-            "discovered under the `dashboards/` directory of this repo."
+        render_app_header(
+            "Thin BI Portal",
+            "Select a dashboard from the sidebar to begin.",
         )
         return
 
