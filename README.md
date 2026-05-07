@@ -1,49 +1,12 @@
 # Thin BI Portal
 
-A high-performance, headless BI tool. Dashboards are defined as code
-(`config.json` + `query.sql`) in a directory tree, executed once against
-Snowflake per dashboard load, then sliced in pandas for instant filtering
-and per-viz aggregation.
+Lightweight BI portal built on Streamlit + Snowflake. Each dashboard is a folder
+under `dashboards/[department]/[dashboard_name]/` with a `config.json` and a
+`query.sql`. The app runs the SQL once per dashboard, caches the DataFrame, and
+renders Plotly visualizations driven by the JSON config.
 
-## Status
+## Deployment
 
-**Step 1: connection test.** Verify Snowflake key-pair auth works before
-building the engine.
-
-## Local setup
-
-```bash
-# 1. Create and activate a venv
-python -m venv .venv
-source .venv/bin/activate          # macOS / Linux
-# .venv\Scripts\activate           # Windows
-
-# 2. Install dependencies
-pip install -r requirements.txt
-
-# 3. Create your secrets file from the template
-cp .streamlit/secrets.toml.example .streamlit/secrets.toml
-# Then edit .streamlit/secrets.toml and paste your private key.
-
-# 4. Run the app
-streamlit run app.py
-```
-
-Click the **Test Snowflake connection** button. You should see a row with
-your Snowflake version, user, role, and warehouse.
-
-## Project layout
-
-```
-thin-bi/
-├── .streamlit/
-│   ├── secrets.toml              ← gitignored, your local creds
-│   └── secrets.toml.example      ← template
-├── dashboards/                   ← (empty — populated in step 3)
-├── engine/
-│   ├── __init__.py
-│   └── snowflake_client.py       ← key-pair auth + query runner
-├── app.py                        ← connection test for step 1
-├── requirements.txt
-└── .gitignore
-```
+Deployed via Streamlit Cloud, auto-deploying from `main`. Snowflake credentials
+live in the Streamlit Cloud Secrets UI — see `.streamlit/secrets.toml.example`
+for the expected schema.
