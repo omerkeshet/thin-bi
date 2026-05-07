@@ -373,6 +373,11 @@ def apply_page_style() -> None:
 
 
 def render_app_header(title: str, subtitle: str | None = None) -> None:
+    subtitle_html = (
+        f'<div style="color:#64748B; font-size:1rem; margin-top:0.25rem;">{subtitle}</div>'
+        if subtitle
+        else ""
+    )
     st.markdown(
         f"""
         <div style="margin-bottom: 1.5rem;">
@@ -383,5 +388,8 @@ def render_app_header(title: str, subtitle: str | None = None) -> None:
               letter-spacing: -0.02em;
               line-height: 1.2;
           ">{title}</div>
-          {f'<div style="color:#64748B; font-size:1rem; margin-top:0.25rem;">{subtitle}</div>' if subtitle else ''}
-        </d
+          {subtitle_html}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
