@@ -1,9 +1,5 @@
 """
-Page-level styling — typography, spacing, sidebar polish, header.
-
-This is global Streamlit CSS injected once at app boot. No per-dashboard
-HTML; just a consistent shell that makes the whole portal feel like one
-product.
+Page-level styling — typography, spacing, sidebar polish.
 """
 
 from __future__ import annotations
@@ -15,24 +11,20 @@ _GLOBAL_CSS = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
-/* Base typography */
 html, body, [class*="css"] {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
-/* Page background — soft off-white, easier on the eyes than pure white */
 .stApp {
     background: #F8FAFC;
 }
 
-/* Main content padding — a touch more breathing room than default */
 .main .block-container {
     padding-top: 2rem;
     padding-bottom: 4rem;
     max-width: 1400px;
 }
 
-/* Headings */
 h1 {
     font-weight: 700 !important;
     color: #0F172A !important;
@@ -45,7 +37,6 @@ h2, h3 {
     letter-spacing: -0.01em;
 }
 
-/* Captions — tone them down */
 [data-testid="stCaptionContainer"] {
     color: #64748B;
 }
@@ -58,8 +49,6 @@ section[data-testid="stSidebar"] {
 section[data-testid="stSidebar"] .stMarkdown p {
     margin-bottom: 0.4rem;
 }
-
-/* Sidebar nav buttons — pill-ish, less Streamlit-default-y */
 section[data-testid="stSidebar"] .stButton > button {
     background: transparent;
     color: #334155;
@@ -76,7 +65,6 @@ section[data-testid="stSidebar"] .stButton > button:hover {
     border-color: #E2E8F0;
     color: #0F172A;
 }
-/* Primary (selected) button */
 section[data-testid="stSidebar"] .stButton > button[kind="primary"] {
     background: #2E5BFF;
     color: white;
@@ -86,8 +74,6 @@ section[data-testid="stSidebar"] .stButton > button[kind="primary"]:hover {
     background: #1E48E8;
     border-color: #1E48E8;
 }
-
-/* Department labels in sidebar */
 section[data-testid="stSidebar"] strong {
     color: #94A3B8;
     text-transform: uppercase;
@@ -96,33 +82,49 @@ section[data-testid="stSidebar"] strong {
     font-weight: 600;
 }
 
-/* Plotly chart containers — subtle card treatment */
-[data-testid="stPlotlyChart"] {
-    background: #FFFFFF;
-    border: 1px solid #E2E8F0;
-    border-radius: 12px;
-    padding: 1rem 1rem 0.5rem 1rem;
-    box-shadow: 0 1px 2px 0 rgba(15, 23, 42, 0.04);
-}
-
-/* Hide the default Streamlit footer + hamburger for a cleaner demo */
+/* Hide Streamlit chrome for a cleaner demo */
 #MainMenu { visibility: hidden; }
 footer { visibility: hidden; }
 header[data-testid="stHeader"] { background: transparent; }
+
+/* ---------- Chart card ---------- */
+.tbi-card {
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-radius: 12px;
+    padding: 1.25rem 1.25rem 0.5rem 1.25rem;
+    box-shadow: 0 1px 2px 0 rgba(15, 23, 42, 0.04);
+    margin-bottom: 1rem;
+}
+.tbi-chart-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #0F172A;
+    letter-spacing: -0.01em;
+    margin: 0 0 0.25rem 0;
+    line-height: 1.3;
+}
+.tbi-chart-subtitle {
+    font-size: 0.8rem;
+    color: #64748B;
+    margin: 0 0 0.75rem 0;
+    line-height: 1.4;
+}
+
+/* Streamlit wraps each plotly chart; remove its own padding so our card
+   handles all spacing. */
+[data-testid="stPlotlyChart"] {
+    padding: 0;
+}
 </style>
 """
 
 
 def apply_page_style() -> None:
-    """Inject global CSS. Call once near the top of app.py."""
     st.markdown(_GLOBAL_CSS, unsafe_allow_html=True)
 
 
 def render_app_header(title: str, subtitle: str | None = None) -> None:
-    """
-    A polished page-level header for when no dashboard is selected.
-    Use sparingly — most pages get the dashboard's own title instead.
-    """
     st.markdown(
         f"""
         <div style="margin-bottom: 1.5rem;">
