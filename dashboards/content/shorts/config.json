@@ -12,7 +12,7 @@
           "y": "plays",
           "aggfunc": "sum",
           "series": "site",
-          "barmode": "group"
+          "barmode": "stack"
         }
       }
     ]
