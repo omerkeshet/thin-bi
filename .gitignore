@@ -1,0 +1,36 @@
+# Secrets — NEVER commit
+.streamlit/secrets.toml
+*.p8
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Streamlit
+.streamlit/cache/
+
+# Misc
+*.log
+.pytest_cache/
+.coverage
