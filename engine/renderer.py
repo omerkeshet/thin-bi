@@ -1,12 +1,5 @@
 """
 Layout renderer + chart factory.
-
-Reads `dashboard.config["layout"]` — a list of rows, each row a list
-of viz definitions — and renders each viz into the appropriate
-st.columns slot.
-
-Currently supports: bar.
-Coming in later steps: line, kpi, table, filters.
 """
 
 from __future__ import annotations
@@ -22,12 +15,14 @@ from engine.data_loader import load_dashboard_data
 from theme.plotly_theme import apply_chart_polish
 
 
+CHART_HEIGHT = 380
+
+
 # ---------------------------------------------------------------------------
 # Public entry point
 # ---------------------------------------------------------------------------
 
 def render_dashboard(dashboard: Dashboard) -> None:
-    """Top-level dashboard renderer."""
     st.title(dashboard.dashboard_title)
     st.caption(f"{dashboard.department_title} · `{dashboard.key}`")
 
@@ -48,7 +43,6 @@ def render_dashboard(dashboard: Dashboard) -> None:
         st.info("Query returned no rows.")
         return
 
-    # Subtle row-count caption (smaller visual weight than before).
     st.caption(f"{len(df):,} rows loaded")
 
     layout = dashboard.config.get("layout") or []
@@ -73,17 +67,31 @@ def render_dashboard(dashboard: Dashboard) -> None:
 # ---------------------------------------------------------------------------
 
 def _render_viz(df: pd.DataFrame, viz: dict[str, Any]) -> None:
-    """Dispatch a single viz definition to the right chart renderer."""
     viz_type = (viz.get("type") or "").lower()
     title = viz.get("title", "")
+    subtitle = viz.get("subtitle", "")
 
     try:
         if viz_type == "bar":
-            _render_bar(df, viz, title)
+            _render_bar(df, viz, title=title, subtitle=subtitle)
         else:
             st.warning(f"Unknown viz type: `{viz_type}` (viz: {title!r})")
     except Exception as e:
         st.error(f"Failed to render viz {title!r}: {type(e).__name__}: {e}")
+
+
+def _open_card(title: str, subtitle: str = "") -> None:
+    """Render the opening card div + HTML title/subtitle."""
+    parts = ['<div class="tbi-card">']
+    if title:
+        parts.append(f'<div class="tbi-chart-title">{title}</div>')
+    if subtitle:
+        parts.append(f'<div class="tbi-chart-subtitle">{subtitle}</div>')
+    st.markdown("".join(parts), unsafe_allow_html=True)
+
+
+def _close_card() -> None:
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def _resolve_measure(
@@ -91,9 +99,6 @@ def _resolve_measure(
     transform: dict[str, Any],
     title: str,
 ) -> tuple[pd.Series, str] | None:
-    """
-    Return (measure_series, measure_label) based on transform.y or transform.y_expr.
-    """
     y_expr = transform.get("y_expr")
     if y_expr:
         if isinstance(y_expr, dict) and "sum" in y_expr:
@@ -132,8 +137,6 @@ def _resolve_measure(
 def _is_date_like(series: pd.Series) -> bool:
     if pd.api.types.is_datetime64_any_dtype(series):
         return True
-    # If pandas left it as object/str (Snowflake DATE often comes as date objects),
-    # peek at the first non-null value.
     sample = series.dropna().head(1)
     if sample.empty:
         return False
@@ -141,20 +144,13 @@ def _is_date_like(series: pd.Series) -> bool:
     return hasattr(val, "year") and hasattr(val, "month") and hasattr(val, "day")
 
 
-def _render_bar(df: pd.DataFrame, viz: dict[str, Any], title: str) -> None:
-    """
-    Bar chart.
-
-    transform fields:
-      x:           column on the x-axis (required)
-      y:           column to aggregate, OR
-      y_expr:      {"sum": ["col_a", "col_b"]} for a derived measure
-      y_label:     optional display name for the measure
-      aggfunc:     pandas agg function name applied AFTER the y/y_expr step
-      series:      optional column to break bars by (color)
-      barmode:     "group" (default) or "stack"
-      stack_order: optional, "sum_desc"
-    """
+def _render_bar(
+    df: pd.DataFrame,
+    viz: dict[str, Any],
+    *,
+    title: str,
+    subtitle: str,
+) -> None:
     transform = viz.get("transform") or {}
     x = transform.get("x")
     aggfunc = transform.get("aggfunc", "sum")
@@ -214,11 +210,11 @@ def _render_bar(df: pd.DataFrame, viz: dict[str, Any], title: str) -> None:
         y=measure_label,
         color=series if series else None,
         barmode=barmode if series else "relative",
-        title=title or None,
+        title=None,  # title rendered as HTML above the chart
         category_orders=category_orders,
+        height=CHART_HEIGHT,
     )
 
-    # Branded hover template — same shape across all bars.
     if series:
         fig.update_traces(
             hovertemplate=(
@@ -239,4 +235,6 @@ def _render_bar(df: pd.DataFrame, viz: dict[str, Any], title: str) -> None:
 
     apply_chart_polish(fig, x_is_date=x_is_date)
 
+    _open_card(title=title, subtitle=subtitle)
     st.plotly_chart(fig, use_container_width=True)
+    _close_card()
