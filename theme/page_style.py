@@ -1,5 +1,6 @@
 """
-Page-level styling — typography, spacing, sidebar polish, light funnel, filters.
+Page-level styling — typography, spacing, sidebar polish, light funnel,
+filters, branded logo treatment.
 """
 
 from __future__ import annotations
@@ -81,6 +82,64 @@ section[data-testid="stSidebar"] strong {
 #MainMenu { visibility: hidden; }
 footer { visibility: hidden; }
 header[data-testid="stHeader"] { background: transparent; }
+
+/* ---------- Brand logo ---------- */
+@keyframes tbi-logo-pulse {
+    0%, 100% {
+        transform: scale(1);
+        filter: drop-shadow(0 0 0 rgba(46, 91, 255, 0));
+    }
+    50% {
+        transform: scale(1.04);
+        filter: drop-shadow(0 0 8px rgba(46, 91, 255, 0.25));
+    }
+}
+
+.tbi-logo {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    animation: tbi-logo-pulse 2.6s ease-in-out infinite;
+    transform-origin: center center;
+    will-change: transform, filter;
+}
+
+.tbi-logo svg, .tbi-logo img {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+/* Sidebar logo block */
+.tbi-sidebar-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    margin: 0.25rem 0 1.5rem 0;
+}
+.tbi-sidebar-brand .tbi-logo {
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+}
+.tbi-sidebar-brand .tbi-brand-name {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #0F172A;
+    letter-spacing: -0.02em;
+    line-height: 1;
+}
+
+/* Landing logo — bigger, more presence */
+.tbi-landing-logo {
+    display: flex;
+    justify-content: center;
+    margin: 1.5rem 0 2rem 0;
+}
+.tbi-landing-logo .tbi-logo {
+    width: 96px;
+    height: 96px;
+}
 
 /* ---------- Chart card ---------- */
 .tbi-card {
@@ -179,7 +238,6 @@ header[data-testid="stHeader"] { background: transparent; }
 .tbi-step-3 { animation-delay: 0.25s; }
 .tbi-step-4 { animation-delay: 0.35s; }
 
-/* Light-step gradients — soft white-to-slate */
 .tbi-step-1 {
     clip-path: polygon(var(--trap-inset-1) 0%, calc(100% - var(--trap-inset-1)) 0%, calc(100% - var(--trap-inset-2)) 100%, var(--trap-inset-2) 100%);
     background: linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%);
@@ -272,7 +330,6 @@ header[data-testid="stHeader"] { background: transparent; }
     min-width: 0;
     cursor: default;
 }
-/* On a light frame, keep an inner separator that reads against any segment color */
 .tbi-segment + .tbi-segment::before {
     content: '';
     position: absolute;
@@ -334,7 +391,6 @@ header[data-testid="stHeader"] { background: transparent; }
 .tbi-segments-row.tier-xs .tbi-segment-value { font-size: 13px; }
 .tbi-segments-row.tier-xs .tbi-segment-pct   { display: none; }
 
-/* Connector badges — light pills */
 .tbi-funnel-connector {
     display: flex;
     justify-content: center;
@@ -385,15 +441,44 @@ def apply_page_style() -> None:
     st.markdown(_GLOBAL_CSS, unsafe_allow_html=True)
 
 
+def render_sidebar_logo(logo_svg: str | None, brand_name: str) -> None:
+    """Render the logo + wordmark at the top of the sidebar."""
+    if logo_svg:
+        block = (
+            f'<div class="tbi-sidebar-brand">'
+            f'<div class="tbi-logo">{logo_svg}</div>'
+            f'<div class="tbi-brand-name">{brand_name}</div>'
+            f"</div>"
+        )
+    else:
+        # Fallback: just a styled wordmark.
+        block = (
+            f'<div class="tbi-sidebar-brand">'
+            f'<div class="tbi-brand-name">{brand_name}</div>'
+            f"</div>"
+        )
+    st.sidebar.markdown(block, unsafe_allow_html=True)
+
+
+def render_landing_logo(logo_svg: str | None) -> None:
+    """Render a larger, prominent version of the logo on the landing screen."""
+    if not logo_svg:
+        return
+    st.markdown(
+        f'<div class="tbi-landing-logo"><div class="tbi-logo">{logo_svg}</div></div>',
+        unsafe_allow_html=True,
+    )
+
+
 def render_app_header(title: str, subtitle: str | None = None) -> None:
     subtitle_html = (
-        f'<div style="color:#64748B; font-size:1rem; margin-top:0.25rem;">{subtitle}</div>'
+        f'<div style="color:#64748B; font-size:1rem; margin-top:0.25rem; text-align:center;">{subtitle}</div>'
         if subtitle
         else ""
     )
     st.markdown(
         f"""
-        <div style="margin-bottom: 1.5rem;">
+        <div style="margin-bottom: 1.5rem; text-align: center;">
           <div style="
               font-size: 2rem;
               font-weight: 700;
