@@ -1,8 +1,10 @@
 """
-Thin BI Portal — entry point.
+OmerBI — entry point.
 """
 
 from __future__ import annotations
+
+from pathlib import Path
 
 import streamlit as st
 
@@ -14,17 +16,40 @@ from engine.dashboard_registry import (
 )
 from engine.renderer import render_dashboard
 from engine.snowflake_client import test_connection
-from theme.page_style import apply_page_style, render_app_header
+from theme.page_style import (
+    apply_page_style,
+    render_app_header,
+    render_landing_logo,
+    render_sidebar_logo,
+)
 from theme.plotly_theme import register_theme
+
+
+# ---------------------------------------------------------------------------
+# Logo loading
+# ---------------------------------------------------------------------------
+
+_REPO_ROOT = Path(__file__).resolve().parent
+_LOGO_PATH = _REPO_ROOT / "assets" / "logo.svg"
+
+
+def _load_logo_svg() -> str | None:
+    """Read the SVG so we can inline it (enables CSS animation on its parts)."""
+    try:
+        return _LOGO_PATH.read_text(encoding="utf-8")
+    except OSError:
+        return None
 
 
 # ---------------------------------------------------------------------------
 # Page config + global styling
 # ---------------------------------------------------------------------------
 
+_logo_svg = _load_logo_svg()
+
 st.set_page_config(
-    page_title="Thin BI Portal",
-    page_icon="📊",
+    page_title="OmerBI",
+    page_icon=str(_LOGO_PATH) if _LOGO_PATH.is_file() else "📊",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -40,18 +65,7 @@ SELECTED_KEY = "selected_dashboard_key"
 
 
 def _render_sidebar(departments: tuple[Department, ...]) -> Dashboard | None:
-    st.sidebar.markdown(
-        """
-        <div style="
-            font-size: 1.25rem;
-            font-weight: 700;
-            color: #0F172A;
-            letter-spacing: -0.01em;
-            margin-bottom: 1.5rem;
-        ">📊 Thin BI Portal</div>
-        """,
-        unsafe_allow_html=True,
-    )
+    render_sidebar_logo(_logo_svg, brand_name="OmerBI")
 
     if not departments:
         st.sidebar.info(
@@ -68,9 +82,8 @@ def _render_sidebar(departments: tuple[Department, ...]) -> Dashboard | None:
         st.sidebar.markdown(f"**{department.title}**")
         for dashboard in department.dashboards:
             is_selected = dashboard.key == selected_key
-            label = dashboard.dashboard_title
             if st.sidebar.button(
-                label,
+                dashboard.dashboard_title,
                 key=f"nav_{dashboard.key}",
                 use_container_width=True,
                 type="primary" if is_selected else "secondary",
@@ -109,8 +122,9 @@ def _render_diagnostics() -> None:
 
 def _render_main(dashboard: Dashboard | None) -> None:
     if dashboard is None:
+        render_landing_logo(_logo_svg)
         render_app_header(
-            "Thin BI Portal",
+            "OmerBI",
             "Select a dashboard from the sidebar to begin.",
         )
         return
