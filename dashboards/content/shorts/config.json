@@ -29,6 +29,13 @@
           "stack_order": "sum_desc"
         }
       }
+    ],
+    [
+      {
+        "type": "shorts_funnel",
+        "title": "Shorts funnel — last 7 days",
+        "subtitle": "From all plays through to impressions, per site"
+      }
     ]
   ]
 }
