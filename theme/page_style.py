@@ -417,6 +417,31 @@ header[data-testid="stHeader"] { background: transparent; }
     font-weight: 500;
     color: #64748B;
 }
+
+/* ---------- Auth login card ---------- */
+.tbi-auth-card {
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-radius: 16px;
+    padding: 2rem 2rem 1rem 2rem;
+    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06);
+    margin-top: 4rem;
+    text-align: center;
+}
+.tbi-auth-title {
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: #0F172A;
+    letter-spacing: -0.02em;
+    margin-bottom: 0.25rem;
+}
+.tbi-auth-subtitle {
+    font-size: 0.9rem;
+    color: #64748B;
+    margin-bottom: 0.5rem;
+}
+</style>
+"""
 </style>
 """
 
