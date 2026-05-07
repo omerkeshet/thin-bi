@@ -1,5 +1,5 @@
 """
-Page-level styling — typography, spacing, sidebar polish, funnel CSS.
+Page-level styling — typography, spacing, sidebar polish, light funnel, filters.
 """
 
 from __future__ import annotations
@@ -17,9 +17,7 @@ html, body, [class*="css"] {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
-.stApp {
-    background: #F8FAFC;
-}
+.stApp { background: #F8FAFC; }
 
 .main .block-container {
     padding-top: 2rem;
@@ -39,18 +37,14 @@ h2, h3 {
     letter-spacing: -0.01em;
 }
 
-[data-testid="stCaptionContainer"] {
-    color: #64748B;
-}
+[data-testid="stCaptionContainer"] { color: #64748B; }
 
 /* Sidebar */
 section[data-testid="stSidebar"] {
     background: #FFFFFF;
     border-right: 1px solid #E2E8F0;
 }
-section[data-testid="stSidebar"] .stMarkdown p {
-    margin-bottom: 0.4rem;
-}
+section[data-testid="stSidebar"] .stMarkdown p { margin-bottom: 0.4rem; }
 section[data-testid="stSidebar"] .stButton > button {
     background: transparent;
     color: #334155;
@@ -111,13 +105,28 @@ header[data-testid="stHeader"] { background: transparent; }
     margin: 0 0 0.75rem 0;
     line-height: 1.4;
 }
+[data-testid="stPlotlyChart"] { padding: 0; }
 
-[data-testid="stPlotlyChart"] {
-    padding: 0;
+/* ---------- Filter bar ---------- */
+.tbi-filter-bar {
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-radius: 12px;
+    padding: 0.75rem 1rem 0.25rem 1rem;
+    margin-bottom: 1.25rem;
+    box-shadow: 0 1px 2px 0 rgba(15, 23, 42, 0.04);
+}
+.tbi-filter-bar [data-testid="stWidgetLabel"] p,
+.tbi-filter-bar label {
+    font-size: 0.78rem !important;
+    font-weight: 600 !important;
+    color: #475569 !important;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
 }
 
 /* ============================================================
-   Funnel viz — ported from the Domo dashboard, scoped under tbi-
+   Light funnel
    ============================================================ */
 
 .tbi-funnel-frame {
@@ -126,7 +135,8 @@ header[data-testid="stHeader"] { background: transparent; }
     --trap-inset-3: 12%;
     --trap-inset-4: 21%;
 
-    background: #1e2233;
+    background: linear-gradient(180deg, #F1F5F9 0%, #E2E8F0 100%);
+    border: 1px solid #E2E8F0;
     border-radius: 12px;
     padding: 36px 0 40px;
     position: relative;
@@ -141,7 +151,7 @@ header[data-testid="stHeader"] { background: transparent; }
     transform: translateX(-50%);
     width: 100%;
     height: 70%;
-    background: radial-gradient(ellipse at center, rgba(99,130,200,0.12) 0%, transparent 70%);
+    background: radial-gradient(ellipse at center, rgba(46,91,255,0.06) 0%, transparent 70%);
     pointer-events: none;
 }
 .tbi-funnel {
@@ -169,21 +179,25 @@ header[data-testid="stHeader"] { background: transparent; }
 .tbi-step-3 { animation-delay: 0.25s; }
 .tbi-step-4 { animation-delay: 0.35s; }
 
+/* Light-step gradients — soft white-to-slate */
 .tbi-step-1 {
     clip-path: polygon(var(--trap-inset-1) 0%, calc(100% - var(--trap-inset-1)) 0%, calc(100% - var(--trap-inset-2)) 100%, var(--trap-inset-2) 100%);
-    background: linear-gradient(180deg, rgba(255,255,255,0.09) 0%, rgba(255,255,255,0.05) 100%);
+    background: linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%);
+    border-bottom: 1px solid rgba(15,23,42,0.04);
 }
 .tbi-step-2 {
     clip-path: polygon(var(--trap-inset-2) 0%, calc(100% - var(--trap-inset-2)) 0%, calc(100% - var(--trap-inset-3)) 100%, var(--trap-inset-3) 100%);
-    background: linear-gradient(180deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.04) 100%);
+    background: linear-gradient(180deg, #FFFFFF 0%, #F1F5F9 100%);
+    border-bottom: 1px solid rgba(15,23,42,0.04);
 }
 .tbi-step-3 {
     clip-path: polygon(var(--trap-inset-3) 0%, calc(100% - var(--trap-inset-3)) 0%, calc(100% - var(--trap-inset-4)) 100%, var(--trap-inset-4) 100%);
-    background: linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.03) 100%);
+    background: linear-gradient(180deg, #FFFFFF 0%, #E2E8F0 100%);
+    border-bottom: 1px solid rgba(15,23,42,0.04);
 }
 .tbi-step-4 {
     clip-path: polygon(var(--trap-inset-4) 0%, calc(100% - var(--trap-inset-4)) 0%, calc(100% - 26%) 100%, 26% 100%);
-    background: linear-gradient(180deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.02) 100%);
+    background: linear-gradient(180deg, #FFFFFF 0%, #CBD5E1 100%);
 }
 
 .tbi-funnel-step::before {
@@ -193,7 +207,7 @@ header[data-testid="stHeader"] { background: transparent; }
     left: 0;
     right: 0;
     height: 1px;
-    background: rgba(255,255,255,0.10);
+    background: rgba(15,23,42,0.06);
     z-index: 2;
 }
 
@@ -222,13 +236,13 @@ header[data-testid="stHeader"] { background: transparent; }
     font-weight: 700;
     letter-spacing: -1.5px;
     line-height: 1.1;
-    color: #ffffff;
+    color: #0F172A;
 }
 .tbi-step-label {
     font-size: 15px;
     font-weight: 600;
     line-height: 1.4;
-    color: #94a3b8;
+    color: #64748B;
 }
 .tbi-step-3 .tbi-step-header,
 .tbi-step-4 .tbi-step-header { padding: 14px 16px 10px; }
@@ -245,7 +259,6 @@ header[data-testid="stHeader"] { background: transparent; }
     position: relative;
     z-index: 1;
     overflow: hidden;
-    border-radius: 0;
 }
 .tbi-segment {
     display: flex;
@@ -259,6 +272,7 @@ header[data-testid="stHeader"] { background: transparent; }
     min-width: 0;
     cursor: default;
 }
+/* On a light frame, keep an inner separator that reads against any segment color */
 .tbi-segment + .tbi-segment::before {
     content: '';
     position: absolute;
@@ -266,7 +280,7 @@ header[data-testid="stHeader"] { background: transparent; }
     top: 12%;
     bottom: 12%;
     width: 0;
-    border-left: 1.5px solid rgba(255, 255, 255, 0.30);
+    border-left: 1.5px solid rgba(255, 255, 255, 0.45);
     pointer-events: none;
     z-index: 3;
 }
@@ -292,7 +306,7 @@ header[data-testid="stHeader"] { background: transparent; }
     font-family: 'IBM Plex Sans', sans-serif;
     font-size: 11px;
     font-weight: 500;
-    opacity: 0.7;
+    opacity: 0.75;
     white-space: nowrap;
     line-height: 1.2;
 }
@@ -320,7 +334,7 @@ header[data-testid="stHeader"] { background: transparent; }
 .tbi-segments-row.tier-xs .tbi-segment-value { font-size: 13px; }
 .tbi-segments-row.tier-xs .tbi-segment-pct   { display: none; }
 
-/* Connector badges */
+/* Connector badges — light pills */
 .tbi-funnel-connector {
     display: flex;
     justify-content: center;
@@ -339,17 +353,16 @@ header[data-testid="stHeader"] { background: transparent; }
     font-family: 'IBM Plex Sans', sans-serif;
     font-size: 11px;
     font-weight: 600;
-    color: #94a3b8;
-    background: rgba(30, 34, 51, 0.85);
-    border: 1px solid rgba(255,255,255,0.12);
+    color: #334155;
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
     border-radius: 100px;
     padding: 3px 10px;
     letter-spacing: 0.3px;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    backdrop-filter: blur(4px);
 }
 .tbi-connector-badge .tbi-cb-dot {
     width: 7px;
@@ -362,7 +375,7 @@ header[data-testid="stHeader"] { background: transparent; }
     font-family: 'Heebo', sans-serif;
     font-size: 10px;
     font-weight: 500;
-    opacity: 0.7;
+    color: #64748B;
 }
 </style>
 """
