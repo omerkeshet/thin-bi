@@ -1,14 +1,6 @@
 """
 Dashboard registry — scans the `dashboards/` directory and produces a
 structured catalog of available dashboards, grouped by department.
-
-A dashboard is a folder at `dashboards/<department>/<name>/` containing
-both `config.json` and `query.sql`. Anything else is ignored.
-
-Scan results are cached for the lifetime of the Streamlit process via
-@st.cache_resource so the filesystem isn't re-walked on every rerun.
-Bumping the cache requires a server restart (or pushing a new commit,
-which Streamlit Cloud restarts automatically).
 """
 
 from __future__ import annotations
@@ -21,45 +13,32 @@ from typing import Any
 import streamlit as st
 
 
-# Repo root — this file lives at <root>/engine/dashboard_registry.py
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 _DASHBOARDS_DIR = _REPO_ROOT / "dashboards"
 
 
 @dataclass(frozen=True)
 class Dashboard:
-    """A single dashboard discovered on disk."""
-
-    # Stable identifier: "<department_slug>/<dashboard_slug>", used as
-    # the session-state key and as the menu option value.
     key: str
-
-    department_slug: str  # folder name under dashboards/
-    dashboard_slug: str   # folder name under dashboards/<department>/
-
-    # Display names from config.json, falling back to slug-based titles.
+    department_slug: str
+    dashboard_slug: str
     department_title: str
     dashboard_title: str
-
-    # Absolute paths to the two files.
     config_path: Path
     query_path: Path
-
-    # Full parsed config.json — handed to later steps as-is.
+    icon: str = "dashboard"
     config: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
 class Department:
-    """A department grouping in the sidebar menu."""
-
     slug: str
     title: str
     dashboards: tuple[Dashboard, ...]
+    icon: str = "briefcase"
 
 
 def _slug_to_title(slug: str) -> str:
-    """Fallback display name when config.json doesn't supply one."""
     return slug.replace("_", " ").replace("-", " ").strip().title()
 
 
@@ -67,7 +46,6 @@ def _load_dashboard(
     department_slug: str,
     dashboard_dir: Path,
 ) -> Dashboard | None:
-    """Try to build a Dashboard from a folder. Returns None if invalid."""
     config_path = dashboard_dir / "config.json"
     query_path = dashboard_dir / "query.sql"
 
@@ -78,8 +56,6 @@ def _load_dashboard(
         with config_path.open("r", encoding="utf-8") as f:
             config = json.load(f)
     except (json.JSONDecodeError, OSError) as e:
-        # Surface the bad config in the UI later via the registry's errors,
-        # but don't crash the whole menu.
         st.warning(
             f"Skipping dashboard `{department_slug}/{dashboard_dir.name}`: "
             f"could not parse config.json ({e})"
@@ -98,6 +74,7 @@ def _load_dashboard(
     department_title = (
         config.get("department_title") or _slug_to_title(department_slug)
     )
+    icon = config.get("icon") or "dashboard"
 
     return Dashboard(
         key=f"{department_slug}/{dashboard_slug}",
@@ -107,19 +84,13 @@ def _load_dashboard(
         dashboard_title=dashboard_title,
         config_path=config_path,
         query_path=query_path,
+        icon=icon,
         config=config,
     )
 
 
 @st.cache_resource(show_spinner=False)
 def scan_dashboards() -> tuple[Department, ...]:
-    """
-    Walk the dashboards/ directory and return a tuple of Department
-    objects, each containing the dashboards found under it.
-
-    Departments and dashboards are sorted alphabetically by their
-    display title for a stable menu order.
-    """
     if not _DASHBOARDS_DIR.is_dir():
         return ()
 
@@ -145,11 +116,16 @@ def scan_dashboards() -> tuple[Department, ...]:
         if not dashboards:
             continue
 
-        # First-found dashboard's department_title wins — they should
-        # all agree, but if they don't, this is a deterministic rule.
         department_title = dashboards[0].department_title
+        # Department icon: take the first dashboard's `department_icon` from
+        # config if present, otherwise a sensible default.
+        dept_icon: str = "briefcase"
+        for d in dashboards:
+            di = d.config.get("department_icon")
+            if di:
+                dept_icon = di
+                break
 
-        # Stable display order within a department.
         dashboards.sort(key=lambda d: d.dashboard_title.lower())
 
         departments.append(
@@ -157,6 +133,7 @@ def scan_dashboards() -> tuple[Department, ...]:
                 slug=dept_dir.name,
                 title=department_title,
                 dashboards=tuple(dashboards),
+                icon=dept_icon,
             )
         )
 
@@ -165,7 +142,6 @@ def scan_dashboards() -> tuple[Department, ...]:
 
 
 def find_dashboard(key: str) -> Dashboard | None:
-    """Look up a dashboard by its `key` ('<dept>/<dash>')."""
     for department in scan_dashboards():
         for dashboard in department.dashboards:
             if dashboard.key == key:
