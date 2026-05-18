@@ -1,5 +1,5 @@
 """
-Layout renderer + chart factory (ECharts for bars, custom HTML for funnel).
+Layout renderer + chart factory (ECharts for bars/lines, HTML for funnel).
 """
 
 from __future__ import annotations
@@ -127,6 +127,8 @@ def _render_viz(df: pd.DataFrame, viz: dict[str, Any]) -> None:
     try:
         if viz_type == "bar":
             _render_bar(df, viz, title=title, subtitle=subtitle)
+        elif viz_type == "line":
+            _render_line(df, viz, title=title, subtitle=subtitle)
         elif viz_type == "shorts_funnel":
             _render_shorts_funnel(df, viz, title=title, subtitle=subtitle)
         else:
@@ -149,45 +151,100 @@ def _close_card() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Bar chart (ECharts)
+# Measure resolution — handles plain columns, sums, and ratios.
 # ---------------------------------------------------------------------------
 
 def _resolve_measure(
     df: pd.DataFrame,
     transform: dict[str, Any],
     title: str,
-) -> tuple[pd.Series, str] | None:
+) -> tuple[pd.Series, str, str] | None:
+    """
+    Returns (series, label, scale) where scale is "linear" or "percent".
+    The scale informs y-axis formatting.
+    """
     y_expr = transform.get("y_expr")
-    if y_expr:
-        if isinstance(y_expr, dict) and "sum" in y_expr:
+    if y_expr and isinstance(y_expr, dict):
+        if "sum" in y_expr:
             cols = y_expr["sum"]
             if not isinstance(cols, list) or not cols:
-                st.warning(f"Bar viz {title!r}: `y_expr.sum` must be a non-empty list.")
+                st.warning(f"Viz {title!r}: `y_expr.sum` must be a non-empty list.")
                 return None
             missing = [c for c in cols if c not in df.columns]
             if missing:
                 st.warning(
-                    f"Bar viz {title!r}: y_expr columns not found: {missing}. "
+                    f"Viz {title!r}: y_expr columns not found: {missing}. "
                     f"Available: {list(df.columns)}"
                 )
                 return None
             label = transform.get("y_label") or " + ".join(cols)
             series = df[cols].sum(axis=1)
             series.name = label
-            return series, label
-        st.warning(f"Bar viz {title!r}: unsupported `y_expr` shape: {y_expr}")
+            return series, label, "linear"
+
+        if "ratio" in y_expr:
+            # Ratios are special: they don't make sense at the row level
+            # before grouping. We mark the series as "needs post-aggregation"
+            # by returning a (numerator, denominator) pair via a tuple-typed
+            # series. But that's awkward. Cleaner: handle ratios in the
+            # render path itself by computing numerator/denominator
+            # separately and dividing AFTER groupby.
+            #
+            # We signal this by returning a sentinel — the caller checks
+            # for `y_expr.ratio` and takes the ratio code path.
+            st.warning(
+                f"Viz {title!r}: `y_expr.ratio` must be handled by the renderer, "
+                "not _resolve_measure. This is a bug if you see it."
+            )
+            return None
+
+        st.warning(f"Viz {title!r}: unsupported `y_expr` shape: {y_expr}")
         return None
 
     y = transform.get("y")
     if not y:
-        st.warning(f"Bar viz {title!r}: requires `transform.y` or `transform.y_expr`.")
+        st.warning(f"Viz {title!r}: requires `transform.y` or `transform.y_expr`.")
         return None
     if y not in df.columns:
-        st.warning(f"Bar viz {title!r}: column `{y}` not found.")
+        st.warning(f"Viz {title!r}: column `{y}` not found.")
         return None
     label = transform.get("y_label") or y
-    return df[y], label
+    return df[y], label, "linear"
 
+
+def _resolve_sum_expr(
+    df: pd.DataFrame,
+    expr: Any,
+    title: str,
+) -> pd.Series | None:
+    """
+    Helper used by ratio measures. Accepts either:
+      - a column name string ("plays")           -> df["plays"]
+      - a dict {"sum": ["natives", "bumpers"]}   -> df[["natives","bumpers"]].sum(axis=1)
+    Returns a pandas Series suitable for groupby-then-sum.
+    """
+    if isinstance(expr, str):
+        if expr not in df.columns:
+            st.warning(f"Viz {title!r}: column `{expr}` not found in ratio.")
+            return None
+        return df[expr]
+    if isinstance(expr, dict) and "sum" in expr:
+        cols = expr["sum"]
+        if not isinstance(cols, list) or not cols:
+            st.warning(f"Viz {title!r}: `sum` in ratio must be a non-empty list.")
+            return None
+        missing = [c for c in cols if c not in df.columns]
+        if missing:
+            st.warning(f"Viz {title!r}: ratio columns not found: {missing}.")
+            return None
+        return df[cols].sum(axis=1)
+    st.warning(f"Viz {title!r}: unsupported ratio operand: {expr}")
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Shared chart utilities
+# ---------------------------------------------------------------------------
 
 def _is_date_like(series: pd.Series) -> bool:
     if pd.api.types.is_datetime64_any_dtype(series):
@@ -207,6 +264,83 @@ def _format_x_value(v: Any, x_is_date: bool) -> str:
         return ts.strftime("%b %d")
     return str(v)
 
+
+def _ordered_series_values(
+    agg: pd.DataFrame,
+    series_col: str,
+    measure_label: str,
+    stack_order: str | None,
+) -> list[str]:
+    unique = agg[series_col].astype(str).unique().tolist()
+    if series_col == "site":
+        return _site_order_for(unique)
+    if stack_order == "sum_desc":
+        totals = (
+            agg.groupby(series_col, dropna=False)[measure_label]
+            .sum()
+            .sort_values(ascending=False)
+        )
+        return totals.index.astype(str).tolist()
+    return sorted(unique)
+
+
+# JS formatters used in tooltip / axis labels.
+_FMT_K_M_B = (
+    "function (v) {"
+    "  var a = Math.abs(v);"
+    "  if (a >= 1e9) return (v/1e9).toFixed(2)+'B';"
+    "  if (a >= 1e6) return (v/1e6).toFixed(2)+'M';"
+    "  if (a >= 1e3) return (v/1e3).toFixed(1)+'K';"
+    "  return v;"
+    "}"
+)
+_FMT_PERCENT = (
+    "function (v) { return (v*100).toFixed(1) + '%'; }"
+)
+_TOOLTIP_LINEAR = """
+    function (params) {
+        if (!params || !params.length) return '';
+        var fmt = function (n) {
+            var a = Math.abs(n);
+            if (a >= 1e9) return (n/1e9).toFixed(2)+'B';
+            if (a >= 1e6) return (n/1e6).toFixed(2)+'M';
+            if (a >= 1e3) return (n/1e3).toFixed(2)+'K';
+            return Number(n).toLocaleString();
+        };
+        var header = '<div style="font-weight:600;color:#0F172A;margin-bottom:4px;">'
+                   + params[0].axisValueLabel + '</div>';
+        var rows = params.map(function (p) {
+            return '<div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#475569;line-height:1.6;">'
+                 + '<span style="width:8px;height:8px;border-radius:50%;background:' + p.color + ';display:inline-block;"></span>'
+                 + '<span style="flex:1;">' + p.seriesName + '</span>'
+                 + '<span style="font-weight:600;color:#0F172A;">' + fmt(p.value) + '</span></div>';
+        }).join('');
+        return header + rows;
+    }
+"""
+_TOOLTIP_PERCENT = """
+    function (params) {
+        if (!params || !params.length) return '';
+        var fmt = function (n) {
+            if (n === null || n === undefined || isNaN(n)) return '—';
+            return (n*100).toFixed(2) + '%';
+        };
+        var header = '<div style="font-weight:600;color:#0F172A;margin-bottom:4px;">'
+                   + params[0].axisValueLabel + '</div>';
+        var rows = params.map(function (p) {
+            return '<div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#475569;line-height:1.6;">'
+                 + '<span style="width:8px;height:8px;border-radius:50%;background:' + p.color + ';display:inline-block;"></span>'
+                 + '<span style="flex:1;">' + p.seriesName + '</span>'
+                 + '<span style="font-weight:600;color:#0F172A;">' + fmt(p.value) + '</span></div>';
+        }).join('');
+        return header + rows;
+    }
+"""
+
+
+# ---------------------------------------------------------------------------
+# Bar chart
+# ---------------------------------------------------------------------------
 
 def _render_bar(
     df: pd.DataFrame,
@@ -235,7 +369,7 @@ def _render_bar(
     measure = _resolve_measure(df, transform, title)
     if measure is None:
         return
-    measure_series, measure_label = measure
+    measure_series, measure_label, _scale = measure
 
     work = pd.DataFrame({x: df[x].values})
     if series_col:
@@ -254,32 +388,15 @@ def _render_bar(
     x_values_raw = list(agg[x].drop_duplicates().tolist())
     x_categories = [_format_x_value(v, x_is_date) for v in x_values_raw]
 
-    # Build series list.
     series_list: list[dict[str, Any]] = []
     if series_col:
-        unique_series = agg[series_col].astype(str).unique().tolist()
-        if series_col == "site":
-            ordered_series = _site_order_for(unique_series)
-        elif stack_order == "sum_desc":
-            totals = (
-                agg.groupby(series_col, dropna=False)[measure_label]
-                .sum()
-                .sort_values(ascending=False)
-            )
-            ordered_series = totals.index.astype(str).tolist()
-        else:
-            ordered_series = sorted(unique_series)
-
-        # Plot order for stacks: ECharts stacks bottom-to-top in the order
-        # series are added. Largest goes first (bottom).
+        ordered_series = _ordered_series_values(agg, series_col, measure_label, stack_order)
         for series_name in ordered_series:
             sub = agg[agg[series_col].astype(str) == str(series_name)]
             value_lookup = dict(zip(sub[x].tolist(), sub[measure_label].tolist()))
-            data = [
-                float(value_lookup.get(xv, 0) or 0) for xv in x_values_raw
-            ]
+            data = [float(value_lookup.get(xv, 0) or 0) for xv in x_values_raw]
             color = _site_color_for(series_name) if series_col == "site" else None
-            entry = {
+            entry: dict[str, Any] = {
                 "name": str(series_name),
                 "type": "bar",
                 "data": data,
@@ -299,64 +416,186 @@ def _render_bar(
             "type": "bar",
             "data": data,
             "barMaxWidth": 40,
-            "itemStyle": {
-                "color": PALETTE[0],
-                "borderRadius": [2, 2, 0, 0],
-            },
+            "itemStyle": {"color": PALETTE[0], "borderRadius": [2, 2, 0, 0]},
             "emphasis": {"focus": "series"},
         })
-
-    # Tooltip formatter: branded, with K/M/B formatting on numeric values.
-    tooltip_formatter = JsCode("""
-        function (params) {
-            if (!params || !params.length) return '';
-            var fmt = function (n) {
-                var a = Math.abs(n);
-                if (a >= 1e9) return (n/1e9).toFixed(2)+'B';
-                if (a >= 1e6) return (n/1e6).toFixed(2)+'M';
-                if (a >= 1e3) return (n/1e3).toFixed(2)+'K';
-                return Number(n).toLocaleString();
-            };
-            var header = '<div style="font-weight:600;color:#0F172A;margin-bottom:4px;">'
-                       + params[0].axisValueLabel + '</div>';
-            var rows = params.map(function (p) {
-                return '<div style="display:flex;align-items:center;gap:6px;'
-                     + 'font-size:12px;color:#475569;line-height:1.6;">'
-                     + '<span style="width:8px;height:8px;border-radius:50%;'
-                     + 'background:' + p.color + ';display:inline-block;"></span>'
-                     + '<span style="flex:1;">' + p.seriesName + '</span>'
-                     + '<span style="font-weight:600;color:#0F172A;">'
-                     + fmt(p.value) + '</span></div>';
-            }).join('');
-            return header + rows;
-        }
-    """).js_code
 
     options: dict[str, Any] = {
         "tooltip": {
             "trigger": "axis",
             "axisPointer": {"type": "shadow"},
-            "formatter": {"_js": tooltip_formatter},
+            "formatter": {"_js": _TOOLTIP_LINEAR},
         },
         "legend": {"show": bool(series_col)},
         "xAxis": {"type": "category", "data": x_categories},
         "yAxis": {"type": "value"},
         "series": series_list,
     }
-
     options = apply_theme(options)
 
     _open_card(title=title, subtitle=subtitle)
     st_echarts(
         options=options,
         height=f"{CHART_HEIGHT_PX}px",
-        key=f"echart::{title}::{x}::{series_col or ''}",
+        key=f"echart-bar::{title}::{x}::{series_col or ''}",
     )
     _close_card()
 
 
 # ---------------------------------------------------------------------------
-# Shorts funnel (unchanged HTML)
+# Line chart — handles both sum measures and ratio measures.
+# ---------------------------------------------------------------------------
+
+def _render_line(
+    df: pd.DataFrame,
+    viz: dict[str, Any],
+    *,
+    title: str,
+    subtitle: str,
+) -> None:
+    transform = viz.get("transform") or {}
+    x = transform.get("x")
+    series_col = transform.get("series")
+    smooth = transform.get("smooth", True)
+
+    if not x:
+        st.warning(f"Line viz {title!r}: requires `transform.x`.")
+        return
+    if x not in df.columns:
+        st.warning(f"Line viz {title!r}: column `{x}` not found.")
+        return
+    if series_col and series_col not in df.columns:
+        st.warning(f"Line viz {title!r}: series column `{series_col}` not found.")
+        return
+
+    # Detect ratio vs plain measure.
+    y_expr = transform.get("y_expr")
+    is_ratio = isinstance(y_expr, dict) and "ratio" in y_expr
+    measure_label = transform.get("y_label") or "value"
+    scale = "linear"
+
+    # Build the working frame with whatever columns we need to aggregate.
+    if is_ratio:
+        ratio = y_expr["ratio"]
+        if not isinstance(ratio, dict) or "numerator" not in ratio or "denominator" not in ratio:
+            st.warning(
+                f"Line viz {title!r}: `y_expr.ratio` must be "
+                "{'numerator': ..., 'denominator': ...}."
+            )
+            return
+        num_series = _resolve_sum_expr(df, ratio["numerator"], title)
+        den_series = _resolve_sum_expr(df, ratio["denominator"], title)
+        if num_series is None or den_series is None:
+            return
+
+        work = pd.DataFrame({x: df[x].values})
+        if series_col:
+            work[series_col] = df[series_col].values
+        work["__num"] = pd.to_numeric(num_series, errors="coerce").fillna(0).values
+        work["__den"] = pd.to_numeric(den_series, errors="coerce").fillna(0).values
+
+        group_cols = [x] + ([series_col] if series_col else [])
+        grouped = work.groupby(group_cols, dropna=False)[["__num", "__den"]].sum().reset_index()
+        # Compute ratio after summing — avoids the "mean of ratios" trap.
+        grouped[measure_label] = grouped.apply(
+            lambda r: (r["__num"] / r["__den"]) if r["__den"] != 0 else 0,
+            axis=1,
+        )
+        agg = grouped[[*group_cols, measure_label]].sort_values(by=group_cols)
+        scale = "percent"
+    else:
+        measure = _resolve_measure(df, transform, title)
+        if measure is None:
+            return
+        measure_series, measure_label, scale = measure
+        aggfunc = transform.get("aggfunc", "sum")
+
+        work = pd.DataFrame({x: df[x].values})
+        if series_col:
+            work[series_col] = df[series_col].values
+        work[measure_label] = measure_series.values
+
+        group_cols = [x] + ([series_col] if series_col else [])
+        agg = (
+            work.groupby(group_cols, dropna=False)[measure_label]
+            .agg(aggfunc)
+            .reset_index()
+        )
+        agg = agg.sort_values(by=group_cols)
+
+    x_is_date = _is_date_like(agg[x])
+    x_values_raw = list(agg[x].drop_duplicates().tolist())
+    x_categories = [_format_x_value(v, x_is_date) for v in x_values_raw]
+
+    series_list: list[dict[str, Any]] = []
+    if series_col:
+        ordered_series = _ordered_series_values(agg, series_col, measure_label, None)
+        for series_name in ordered_series:
+            sub = agg[agg[series_col].astype(str) == str(series_name)]
+            value_lookup = dict(zip(sub[x].tolist(), sub[measure_label].tolist()))
+            data = [float(value_lookup.get(xv, 0) or 0) for xv in x_values_raw]
+            color = _site_color_for(series_name) if series_col == "site" else None
+            entry: dict[str, Any] = {
+                "name": str(series_name),
+                "type": "line",
+                "data": data,
+                "smooth": bool(smooth),
+                "symbolSize": 7,
+                "lineStyle": {"width": 2.5},
+                "emphasis": {"focus": "series"},
+            }
+            if color:
+                entry["itemStyle"] = {"color": color}
+                entry["lineStyle"]["color"] = color
+            series_list.append(entry)
+    else:
+        data = [float(v or 0) for v in agg[measure_label].tolist()]
+        series_list.append({
+            "name": measure_label,
+            "type": "line",
+            "data": data,
+            "smooth": bool(smooth),
+            "symbolSize": 7,
+            "lineStyle": {"width": 2.5, "color": PALETTE[0]},
+            "itemStyle": {"color": PALETTE[0]},
+            "emphasis": {"focus": "series"},
+            "areaStyle": {"opacity": 0.08, "color": PALETTE[0]},
+        })
+
+    if scale == "percent":
+        y_axis = {
+            "type": "value",
+            "axisLabel": {"formatter": {"_js": _FMT_PERCENT}},
+        }
+        tooltip_fmt = _TOOLTIP_PERCENT
+    else:
+        y_axis = {"type": "value"}
+        tooltip_fmt = _TOOLTIP_LINEAR
+
+    options: dict[str, Any] = {
+        "tooltip": {
+            "trigger": "axis",
+            "axisPointer": {"type": "line"},
+            "formatter": {"_js": tooltip_fmt},
+        },
+        "legend": {"show": bool(series_col)},
+        "xAxis": {"type": "category", "data": x_categories, "boundaryGap": False},
+        "yAxis": y_axis,
+        "series": series_list,
+    }
+    options = apply_theme(options)
+
+    _open_card(title=title, subtitle=subtitle)
+    st_echarts(
+        options=options,
+        height=f"{CHART_HEIGHT_PX}px",
+        key=f"echart-line::{title}::{x}::{series_col or ''}",
+    )
+    _close_card()
+
+
+# ---------------------------------------------------------------------------
+# Shorts funnel — unchanged
 # ---------------------------------------------------------------------------
 
 def _format_pct(current: float, previous: float) -> str:
@@ -379,13 +618,11 @@ def _render_step_segments(step: FunnelStep) -> str:
         tier_cls = ""
 
     ordered_sites = _site_order_for(list(step.by_site.keys()))
-
     parts: list[str] = [f'<div class="tbi-segments-row {tier_cls}">']
     for site_name in ordered_sites:
         value = step.by_site.get(site_name, 0)
         if value <= 0:
             continue
-
         pct = (value / step.total) * 100
         effective_pct = (pct * step.width_pct) / 100
         narrow_cls = ""
@@ -393,16 +630,13 @@ def _render_step_segments(step: FunnelStep) -> str:
             narrow_cls = " tbi-very-narrow"
         elif effective_pct < 10:
             narrow_cls = " tbi-narrow"
-
         site_key = site_name.strip().lower()
         bg = SITE_BRAND_COLORS.get(site_key, "#1b6ca8")
         text_color = _site_text_color(site_name)
-
         style = (
             f"flex-basis:{pct}%;flex-grow:0;flex-shrink:0;"
             f"background:{bg};color:{text_color};"
         )
-
         parts.append(
             f'<div class="tbi-segment{narrow_cls}" style="{style}" '
             f'data-tip-site="{html.escape(site_name)}" '
@@ -413,7 +647,6 @@ def _render_step_segments(step: FunnelStep) -> str:
             f'<span class="tbi-segment-pct">{pct:.1f}%</span>'
             f"</div>"
         )
-
     parts.append("</div>")
     return "".join(parts)
 
