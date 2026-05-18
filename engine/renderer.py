@@ -498,7 +498,7 @@ def _render_line(
         grouped = work.groupby(group_cols, dropna=False)[["__num", "__den"]].sum().reset_index()
         # Compute ratio after summing — avoids the "mean of ratios" trap.
         grouped[measure_label] = grouped.apply(
-            lambda r: (r["__num"] / r["__den"]) if r["__den"] != 0 else 0,
+            lambda r: (r["__num"] / r["__den"] * 100) if r["__den"] != 0 else 0,
             axis=1,
         )
         agg = grouped[[*group_cols, measure_label]].sort_values(by=group_cols)
@@ -563,21 +563,33 @@ def _render_line(
         })
 
     if scale == "percent":
+        # Data is already in percent units (e.g. 38.3, not 0.383).
+        # ECharts string formatters: '{value}%' works without JS.
         y_axis = {
             "type": "value",
-            "axisLabel": {"formatter": {"_js": _FMT_PERCENT}},
+            "axisLabel": {"formatter": "{value}%"},
+            "min": 0,
         }
-        tooltip_fmt = _TOOLTIP_PERCENT
+        tooltip_fmt = "{a}: {c}%"  # series name : value %
     else:
         y_axis = {"type": "value"}
         tooltip_fmt = _TOOLTIP_LINEAR
 
-    options: dict[str, Any] = {
-        "tooltip": {
+if scale == "percent":
+        tooltip_opt = {
             "trigger": "axis",
             "axisPointer": {"type": "line"},
-            "formatter": {"_js": tooltip_fmt},
-        },
+            "valueFormatter": "{value}%",  # not always honored
+        }
+    else:
+        tooltip_opt = {
+            "trigger": "axis",
+            "axisPointer": {"type": "line"},
+            "formatter": tooltip_fmt,  # JsCode for linear
+        }
+
+    options: dict[str, Any] = {
+        "tooltip": tooltip_opt,
         "legend": {"show": bool(series_col)},
         "xAxis": {"type": "category", "data": x_categories, "boundaryGap": False},
         "yAxis": y_axis,
