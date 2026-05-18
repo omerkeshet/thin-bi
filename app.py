@@ -17,13 +17,14 @@ from engine.dashboard_registry import (
 )
 from engine.renderer import render_dashboard
 from engine.snowflake_client import test_connection
+from theme.icons import icon
 from theme.page_style import (
     apply_page_style,
     render_app_header,
     render_landing_logo,
     render_sidebar_logo,
 )
-from theme.plotly_theme import register_theme
+from theme.echarts_theme import THEME as _ECHARTS_THEME  # noqa: F401  (kept for future theme registration)
 
 
 # ---------------------------------------------------------------------------
@@ -45,11 +46,10 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 apply_page_style()
-register_theme()
 
 
 # ---------------------------------------------------------------------------
-# Auth gate — runs before anything else
+# Auth gate
 # ---------------------------------------------------------------------------
 
 if not require_auth():
@@ -63,14 +63,44 @@ if not require_auth():
 SELECTED_KEY = "selected_dashboard_key"
 
 
+def _render_nav_item(dashboard: Dashboard, is_selected: bool) -> bool:
+    """Render an icon + label nav button. Returns True if clicked."""
+    icon_svg = icon(dashboard.icon, size=15)
+    cls = "tbi-nav-item tbi-nav-active" if is_selected else "tbi-nav-item"
+    # The button itself is invisible (just a click target). The visual
+    # appearance is the styled <div> we render right above it.
+    st.sidebar.markdown(
+        f'<div class="{cls}">'
+        f'<span class="tbi-nav-icon">{icon_svg}</span>'
+        f'<span class="tbi-nav-label">{dashboard.dashboard_title}</span>'
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+    return st.sidebar.button(
+        dashboard.dashboard_title,
+        key=f"nav_{dashboard.key}",
+        use_container_width=True,
+    )
+
+
+def _render_dept_header(dept: Department) -> None:
+    icon_svg = icon(dept.icon, size=12)
+    st.sidebar.markdown(
+        f'<div class="tbi-dept-header">'
+        f'<span class="tbi-dept-icon">{icon_svg}</span>'
+        f'<span class="tbi-dept-name">{dept.title}</span>'
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+
 def _render_sidebar(departments: tuple[Department, ...]) -> Dashboard | None:
     render_sidebar_logo(_LOGO_PATH, brand_name="OmerBI")
 
     if not departments:
         st.sidebar.info(
             "No dashboards found yet.\n\n"
-            "Add folders under `dashboards/<department>/<name>/` "
-            "with a `config.json` and `query.sql`."
+            "Add folders under `dashboards/<department>/<name>/`."
         )
         _render_sidebar_footer()
         return None
@@ -78,15 +108,10 @@ def _render_sidebar(departments: tuple[Department, ...]) -> Dashboard | None:
     selected_key = st.session_state.get(SELECTED_KEY)
 
     for department in departments:
-        st.sidebar.markdown(f"**{department.title}**")
+        _render_dept_header(department)
         for dashboard in department.dashboards:
             is_selected = dashboard.key == selected_key
-            if st.sidebar.button(
-                dashboard.dashboard_title,
-                key=f"nav_{dashboard.key}",
-                use_container_width=True,
-                type="primary" if is_selected else "secondary",
-            ):
+            if _render_nav_item(dashboard, is_selected):
                 st.session_state[SELECTED_KEY] = dashboard.key
                 st.rerun()
         st.sidebar.markdown("")
@@ -103,8 +128,8 @@ def _render_sidebar(departments: tuple[Department, ...]) -> Dashboard | None:
 
 
 def _render_sidebar_footer() -> None:
-    """Diagnostics + sign out, anchored at the bottom of the sidebar."""
-    with st.sidebar.expander("🔧 Diagnostics", expanded=False):
+    st.sidebar.markdown('<div class="tbi-sidebar-footer">', unsafe_allow_html=True)
+    with st.sidebar.expander("Diagnostics", expanded=False):
         if st.button("Test Snowflake connection", key="diag_test_conn"):
             with st.spinner("Connecting..."):
                 try:
@@ -112,11 +137,10 @@ def _render_sidebar_footer() -> None:
                 except Exception as e:
                     st.error(f"Connection failed: {type(e).__name__}: {e}")
                 else:
-                    st.success("Connected ✅")
+                    st.success("Connected")
                     st.json(info)
-
-    st.sidebar.markdown("---")
     render_logout_button()
+    st.sidebar.markdown("</div>", unsafe_allow_html=True)
 
 
 # ---------------------------------------------------------------------------
@@ -134,10 +158,6 @@ def _render_main(dashboard: Dashboard | None) -> None:
 
     render_dashboard(dashboard)
 
-
-# ---------------------------------------------------------------------------
-# Entry point
-# ---------------------------------------------------------------------------
 
 def main() -> None:
     departments = scan_dashboards()
