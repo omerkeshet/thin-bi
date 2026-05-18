@@ -1,5 +1,9 @@
 """
 Layout renderer + chart factory (ECharts for bars/lines, HTML for funnel).
+
+Note: this uses streamlit-echarts' `st_echarts` which does NOT support
+JsCode-wrapped JavaScript functions. All formatters here are plain string
+templates that ECharts understands natively.
 """
 
 from __future__ import annotations
@@ -9,7 +13,7 @@ from typing import Any
 
 import pandas as pd
 import streamlit as st
-from streamlit_echarts import JsCode, st_echarts
+from streamlit_echarts import st_echarts
 
 from engine.dashboard_registry import Dashboard
 from engine.data_loader import load_dashboard_data
@@ -56,52 +60,6 @@ def _site_order_for(values: list[str]) -> list[str]:
             ordered.append(by_key.pop(key))
     ordered.extend(sorted(by_key.values()))
     return ordered
-
-
-# ---------------------------------------------------------------------------
-# JS formatters / tooltips (for linear charts)
-# ---------------------------------------------------------------------------
-
-_TOOLTIP_LINEAR = JsCode("""
-    function (params) {
-        if (!params || !params.length) return '';
-        var fmt = function (n) {
-            var a = Math.abs(n);
-            if (a >= 1e9) return (n/1e9).toFixed(2)+'B';
-            if (a >= 1e6) return (n/1e6).toFixed(2)+'M';
-            if (a >= 1e3) return (n/1e3).toFixed(2)+'K';
-            return Number(n).toLocaleString();
-        };
-        var header = '<div style="font-weight:600;color:#0F172A;margin-bottom:4px;">'
-                   + params[0].axisValueLabel + '</div>';
-        var rows = params.map(function (p) {
-            return '<div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#475569;line-height:1.6;">'
-                 + '<span style="width:8px;height:8px;border-radius:50%;background:' + p.color + ';display:inline-block;"></span>'
-                 + '<span style="flex:1;">' + p.seriesName + '</span>'
-                 + '<span style="font-weight:600;color:#0F172A;">' + fmt(p.value) + '</span></div>';
-        }).join('');
-        return header + rows;
-    }
-""")
-
-_TOOLTIP_PCT = JsCode("""
-    function (params) {
-        if (!params || !params.length) return '';
-        var fmt = function (n) {
-            if (n === null || n === undefined || isNaN(n)) return '—';
-            return Number(n).toFixed(2) + '%';
-        };
-        var header = '<div style="font-weight:600;color:#0F172A;margin-bottom:4px;">'
-                   + params[0].axisValueLabel + '</div>';
-        var rows = params.map(function (p) {
-            return '<div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#475569;line-height:1.6;">'
-                 + '<span style="width:8px;height:8px;border-radius:50%;background:' + p.color + ';display:inline-block;"></span>'
-                 + '<span style="flex:1;">' + p.seriesName + '</span>'
-                 + '<span style="font-weight:600;color:#0F172A;">' + fmt(p.value) + '</span></div>';
-        }).join('');
-        return header + rows;
-    }
-""")
 
 
 # ---------------------------------------------------------------------------
@@ -225,7 +183,7 @@ def _resolve_measure(
             return series, label, "linear"
 
         if "ratio" in y_expr:
-            return None  # caller must take the ratio code path
+            return None  # caller takes the ratio code path
 
         st.warning(f"Viz {title!r}: unsupported `y_expr` shape: {y_expr}")
         return None
@@ -266,7 +224,7 @@ def _resolve_sum_expr(
 
 
 # ---------------------------------------------------------------------------
-# Shared chart utilities
+# Shared utilities
 # ---------------------------------------------------------------------------
 
 def _is_date_like(series: pd.Series) -> bool:
@@ -393,7 +351,6 @@ def _render_bar(
         "tooltip": {
             "trigger": "axis",
             "axisPointer": {"type": "shadow"},
-            "formatter": _TOOLTIP_LINEAR,
         },
         "legend": {"show": bool(series_col)},
         "xAxis": {"type": "category", "data": x_categories},
@@ -463,10 +420,11 @@ def _render_line(
 
         group_cols = [x] + ([series_col] if series_col else [])
         grouped = work.groupby(group_cols, dropna=False)[["__num", "__den"]].sum().reset_index()
-        # Multiply by 100 so the value is already in "percent units"
-        # (e.g. 38.3, not 0.383). ECharts axis/tooltip just need to append '%'.
+        # Multiply by 100 — values are now in "percent units" (38.3 not 0.383).
+        # We also round to 1 decimal to keep tooltips clean since we can't
+        # use a JS formatter to control display precision.
         grouped[measure_label] = grouped.apply(
-            lambda r: (r["__num"] / r["__den"] * 100) if r["__den"] != 0 else 0,
+            lambda r: round((r["__num"] / r["__den"] * 100), 1) if r["__den"] != 0 else 0,
             axis=1,
         )
         agg = grouped[[*group_cols, measure_label]].sort_values(by=group_cols)
@@ -530,29 +488,26 @@ def _render_line(
             "areaStyle": {"opacity": 0.08, "color": PALETTE[0]},
         })
 
-    # Y axis + tooltip — percent path uses pure string formatters (no JS),
-    # because data is already in "38.3" units.
+    # Y axis + tooltip — plain string templates only.
     if scale == "percent":
         y_axis: dict[str, Any] = {
             "type": "value",
             "axisLabel": {"formatter": "{value}%"},
             "min": 0,
         }
+        # ECharts axis-trigger tooltip with default formatter shows the
+        # raw number. We provide a string template that appends "%".
+        # The {a} is series name, {c} is value.
         tooltip_opt: dict[str, Any] = {
             "trigger": "axis",
             "axisPointer": {"type": "line"},
-            "valueFormatter": JsCode(
-                "function(v){ "
-                "if (v===null||v===undefined||isNaN(v)) return '—'; "
-                "return Number(v).toFixed(2)+'%'; }"
-            ),
+            "valueFormatter": "{value}%",
         }
     else:
         y_axis = {"type": "value"}
         tooltip_opt = {
             "trigger": "axis",
             "axisPointer": {"type": "line"},
-            "formatter": _TOOLTIP_LINEAR,
         }
 
     options: dict[str, Any] = {
