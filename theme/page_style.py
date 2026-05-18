@@ -1,6 +1,5 @@
 """
-Page-level styling — typography, spacing, sidebar polish, light funnel,
-filters, branded logo treatment.
+Page-level styling — Frappe-Insights-inspired density and aesthetic.
 """
 
 from __future__ import annotations
@@ -19,36 +18,80 @@ _GLOBAL_CSS = """
 
 html, body, [class*="css"] {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 13px;
 }
 
-.stApp { background: #F8FAFC; }
+.stApp { background: #FFFFFF; }
 
 .main .block-container {
-    padding-top: 2rem;
-    padding-bottom: 4rem;
+    padding-top: 1.5rem;
+    padding-bottom: 3rem;
     max-width: 1400px;
 }
 
+/* Streamlit default heading sizes are too large for a dense BI tool. */
 h1 {
-    font-weight: 700 !important;
-    color: #0F172A !important;
-    letter-spacing: -0.02em;
-    margin-bottom: 0.25rem !important;
-}
-h2, h3 {
     font-weight: 600 !important;
     color: #0F172A !important;
     letter-spacing: -0.01em;
+    font-size: 1.25rem !important;
+    margin: 0 !important;
+}
+h2 {
+    font-weight: 600 !important;
+    color: #0F172A !important;
+    font-size: 1.05rem !important;
+}
+h3 {
+    font-weight: 600 !important;
+    color: #0F172A !important;
+    font-size: 0.95rem !important;
 }
 
-[data-testid="stCaptionContainer"] { color: #64748B; }
+[data-testid="stCaptionContainer"] {
+    color: #64748B;
+    font-size: 0.78rem;
+}
 
-/* Sidebar */
+/* --- Page header --- */
+.tbi-page-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid #E2E8F0;
+    margin-bottom: 1.25rem;
+}
+.tbi-page-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #0F172A;
+    letter-spacing: -0.01em;
+    line-height: 1.2;
+}
+.tbi-page-meta {
+    font-size: 0.78rem;
+    color: #94A3B8;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 500;
+}
+.tbi-page-description {
+    color: #64748B;
+    font-size: 0.85rem;
+    margin: -0.5rem 0 1rem 0;
+}
+
+/* --- Sidebar --- */
 section[data-testid="stSidebar"] {
-    background: #FFFFFF;
+    background: #FAFAFB;
     border-right: 1px solid #E2E8F0;
 }
-section[data-testid="stSidebar"] .stMarkdown p { margin-bottom: 0.4rem; }
+section[data-testid="stSidebar"] .stMarkdown p {
+    margin-bottom: 0.3rem;
+    font-size: 0.85rem;
+}
 section[data-testid="stSidebar"] .stButton > button {
     background: transparent;
     color: #334155;
@@ -56,28 +99,30 @@ section[data-testid="stSidebar"] .stButton > button {
     text-align: left;
     justify-content: flex-start;
     font-weight: 500;
-    border-radius: 8px;
-    padding: 0.4rem 0.75rem;
-    transition: all 0.15s ease;
+    border-radius: 6px;
+    padding: 0.35rem 0.6rem;
+    font-size: 0.85rem;
+    transition: background 0.12s ease, color 0.12s ease;
+    box-shadow: none !important;
 }
 section[data-testid="stSidebar"] .stButton > button:hover {
     background: #F1F5F9;
-    border-color: #E2E8F0;
     color: #0F172A;
 }
 section[data-testid="stSidebar"] .stButton > button[kind="primary"] {
-    background: #2E5BFF;
-    color: white;
-    border-color: #2E5BFF;
+    background: #EEF2FF;
+    color: #2563EB;
+    font-weight: 600;
+    border-color: transparent;
 }
 section[data-testid="stSidebar"] .stButton > button[kind="primary"]:hover {
-    background: #1E48E8;
-    border-color: #1E48E8;
+    background: #E0E7FF;
+    color: #1E40AF;
 }
 section[data-testid="stSidebar"] strong {
     color: #94A3B8;
     text-transform: uppercase;
-    font-size: 0.7rem;
+    font-size: 0.65rem;
     letter-spacing: 0.08em;
     font-weight: 600;
 }
@@ -86,18 +131,17 @@ section[data-testid="stSidebar"] strong {
 footer { visibility: hidden; }
 header[data-testid="stHeader"] { background: transparent; }
 
-/* ---------- Brand logo ---------- */
+/* --- Brand logo --- */
 @keyframes tbi-logo-pulse {
     0%, 100% {
         transform: scale(1);
         filter: drop-shadow(0 0 0 rgba(46, 91, 255, 0));
     }
     50% {
-        transform: scale(1.03);
-        filter: drop-shadow(0 0 12px rgba(46, 91, 255, 0.22));
+        transform: scale(1.025);
+        filter: drop-shadow(0 0 10px rgba(46, 91, 255, 0.18));
     }
 }
-
 .tbi-logo-img {
     display: block;
     width: 100%;
@@ -106,85 +150,101 @@ header[data-testid="stHeader"] { background: transparent; }
     transform-origin: center center;
     will-change: transform, filter;
 }
-
-/* Sidebar logo block — wide horizontal lockup, fits sidebar width */
 .tbi-sidebar-brand {
-    margin: 0.25rem 0 1.5rem 0;
+    margin: 0.25rem 0 1.25rem 0;
     width: 100%;
 }
-
-/* Landing logo — large hero treatment */
 .tbi-landing-logo {
     display: flex;
     justify-content: center;
-    margin: 1.5rem 0 1.5rem 0;
+    margin: 1rem 0 1.25rem 0;
 }
 .tbi-landing-logo .tbi-logo-img {
-    max-width: 540px;
+    max-width: 480px;
     width: 100%;
     height: auto;
 }
 
-/* ---------- Chart card ---------- */
+/* --- Chart card --- */
 .tbi-card {
     background: #FFFFFF;
     border: 1px solid #E2E8F0;
-    border-radius: 12px;
-    padding: 1.25rem 1.25rem 0.5rem 1.25rem;
-    box-shadow: 0 1px 2px 0 rgba(15, 23, 42, 0.04);
-    margin-bottom: 1rem;
+    border-radius: 8px;
+    padding: 1rem 1rem 0.5rem 1rem;
+    margin-bottom: 0.75rem;
 }
 .tbi-chart-title {
-    font-size: 0.95rem;
+    font-size: 0.85rem;
     font-weight: 600;
     color: #0F172A;
-    letter-spacing: -0.01em;
-    margin: 0 0 0.25rem 0;
+    letter-spacing: -0.005em;
+    margin: 0 0 0.15rem 0;
     line-height: 1.3;
 }
 .tbi-chart-subtitle {
-    font-size: 0.8rem;
+    font-size: 0.75rem;
     color: #64748B;
-    margin: 0 0 0.75rem 0;
+    margin: 0 0 0.6rem 0;
     line-height: 1.4;
 }
 [data-testid="stPlotlyChart"] { padding: 0; }
+.element-container:has(> iframe) { margin-bottom: 0 !important; }
 
-/* ---------- Filter bar ---------- */
+/* --- Filter bar --- */
 .tbi-filter-bar {
     background: #FFFFFF;
     border: 1px solid #E2E8F0;
-    border-radius: 12px;
-    padding: 0.75rem 1rem 0.25rem 1rem;
-    margin-bottom: 1.25rem;
-    box-shadow: 0 1px 2px 0 rgba(15, 23, 42, 0.04);
+    border-radius: 8px;
+    padding: 0.6rem 0.9rem 0.15rem 0.9rem;
+    margin-bottom: 1rem;
 }
 .tbi-filter-bar [data-testid="stWidgetLabel"] p,
 .tbi-filter-bar label {
-    font-size: 0.78rem !important;
+    font-size: 0.7rem !important;
     font-weight: 600 !important;
-    color: #475569 !important;
+    color: #64748B !important;
     text-transform: uppercase;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.05em;
+}
+
+/* --- Auth login card --- */
+.tbi-auth-card {
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-radius: 10px;
+    padding: 1.75rem 1.75rem 0.75rem 1.75rem;
+    margin-top: 4rem;
+    text-align: center;
+}
+.tbi-auth-title {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #0F172A;
+    letter-spacing: -0.02em;
+    margin-bottom: 0.15rem;
+}
+.tbi-auth-subtitle {
+    font-size: 0.85rem;
+    color: #64748B;
+    margin-bottom: 0.5rem;
 }
 
 /* ============================================================
-   Light funnel
+   Light funnel — unchanged
    ============================================================ */
-
 .tbi-funnel-frame {
     --trap-inset-1: 0%;
     --trap-inset-2: 5%;
     --trap-inset-3: 12%;
     --trap-inset-4: 21%;
 
-    background: linear-gradient(180deg, #F1F5F9 0%, #E2E8F0 100%);
+    background: linear-gradient(180deg, #F8FAFC 0%, #EEF2F7 100%);
     border: 1px solid #E2E8F0;
-    border-radius: 12px;
-    padding: 36px 0 40px;
+    border-radius: 8px;
+    padding: 32px 0 36px;
     position: relative;
     overflow: hidden;
-    margin-top: 0.5rem;
+    margin-top: 0.25rem;
 }
 .tbi-funnel-frame::before {
     content: '';
@@ -194,7 +254,7 @@ header[data-testid="stHeader"] { background: transparent; }
     transform: translateX(-50%);
     width: 100%;
     height: 70%;
-    background: radial-gradient(ellipse at center, rgba(46,91,255,0.06) 0%, transparent 70%);
+    background: radial-gradient(ellipse at center, rgba(37,99,235,0.05) 0%, transparent 70%);
     pointer-events: none;
 }
 .tbi-funnel {
@@ -264,7 +324,7 @@ header[data-testid="stHeader"] { background: transparent; }
 .tbi-step-4 .tbi-step-header { padding-left: calc(26% + 12px); padding-right: calc(26% + 12px); }
 
 .tbi-step-header {
-    padding: 18px 24px 12px;
+    padding: 16px 24px 10px;
     position: relative;
     z-index: 2;
     display: flex;
@@ -274,30 +334,30 @@ header[data-testid="stHeader"] { background: transparent; }
 }
 .tbi-step-number {
     font-family: 'IBM Plex Sans', sans-serif;
-    font-size: 44px;
+    font-size: 40px;
     font-weight: 700;
     letter-spacing: -1.5px;
     line-height: 1.1;
     color: #0F172A;
 }
 .tbi-step-label {
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 600;
     line-height: 1.4;
     color: #64748B;
 }
 .tbi-step-3 .tbi-step-header,
-.tbi-step-4 .tbi-step-header { padding: 14px 16px 10px; }
-.tbi-step-3 .tbi-step-number { font-size: 36px; }
-.tbi-step-4 .tbi-step-number { font-size: 30px; }
-.tbi-step-3 .tbi-step-label  { font-size: 13px; }
-.tbi-step-4 .tbi-step-label  { font-size: 12px; }
+.tbi-step-4 .tbi-step-header { padding: 12px 16px 8px; }
+.tbi-step-3 .tbi-step-number { font-size: 32px; }
+.tbi-step-4 .tbi-step-number { font-size: 28px; }
+.tbi-step-3 .tbi-step-label  { font-size: 12px; }
+.tbi-step-4 .tbi-step-label  { font-size: 11px; }
 
 .tbi-segments-row {
     display: flex;
     direction: ltr;
     width: 100%;
-    min-height: 54px;
+    min-height: 52px;
     position: relative;
     z-index: 1;
     overflow: hidden;
@@ -307,7 +367,7 @@ header[data-testid="stHeader"] { background: transparent; }
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 8px 10px;
+    padding: 7px 10px;
     overflow: hidden;
     position: relative;
     transition: flex-basis 0.5s ease;
@@ -327,7 +387,7 @@ header[data-testid="stHeader"] { background: transparent; }
 }
 .tbi-segment-name {
     font-family: 'Heebo', sans-serif;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 700;
     white-space: nowrap;
     overflow: hidden;
@@ -338,14 +398,14 @@ header[data-testid="stHeader"] { background: transparent; }
 }
 .tbi-segment-value {
     font-family: 'IBM Plex Sans', sans-serif;
-    font-size: 19px;
+    font-size: 18px;
     font-weight: 700;
     white-space: nowrap;
     line-height: 1.3;
 }
 .tbi-segment-pct {
     font-family: 'IBM Plex Sans', sans-serif;
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 500;
     opacity: 0.75;
     white-space: nowrap;
@@ -357,22 +417,22 @@ header[data-testid="stHeader"] { background: transparent; }
 .tbi-segment.tbi-very-narrow .tbi-segment-value,
 .tbi-segment.tbi-very-narrow .tbi-segment-pct { display: none; }
 
-.tbi-segments-row.tier-md { min-height: 46px; }
-.tbi-segments-row.tier-md .tbi-segment { padding: 6px 5px; }
-.tbi-segments-row.tier-md .tbi-segment-name  { font-size: 13px; }
-.tbi-segments-row.tier-md .tbi-segment-value { font-size: 17px; }
+.tbi-segments-row.tier-md { min-height: 44px; }
+.tbi-segments-row.tier-md .tbi-segment { padding: 5px 5px; }
+.tbi-segments-row.tier-md .tbi-segment-name  { font-size: 12px; }
+.tbi-segments-row.tier-md .tbi-segment-value { font-size: 16px; }
 .tbi-segments-row.tier-md .tbi-segment-pct   { font-size: 10px; }
 
-.tbi-segments-row.tier-sm { min-height: 42px; }
-.tbi-segments-row.tier-sm .tbi-segment { padding: 5px 4px; }
-.tbi-segments-row.tier-sm .tbi-segment-name  { font-size: 12px; }
-.tbi-segments-row.tier-sm .tbi-segment-value { font-size: 15px; }
+.tbi-segments-row.tier-sm { min-height: 40px; }
+.tbi-segments-row.tier-sm .tbi-segment { padding: 4px 4px; }
+.tbi-segments-row.tier-sm .tbi-segment-name  { font-size: 11px; }
+.tbi-segments-row.tier-sm .tbi-segment-value { font-size: 14px; }
 .tbi-segments-row.tier-sm .tbi-segment-pct   { font-size: 9px; }
 
-.tbi-segments-row.tier-xs { min-height: 38px; }
+.tbi-segments-row.tier-xs { min-height: 36px; }
 .tbi-segments-row.tier-xs .tbi-segment { padding: 4px 3px; }
 .tbi-segments-row.tier-xs .tbi-segment-name  { font-size: 10px; }
-.tbi-segments-row.tier-xs .tbi-segment-value { font-size: 13px; }
+.tbi-segments-row.tier-xs .tbi-segment-value { font-size: 12px; }
 .tbi-segments-row.tier-xs .tbi-segment-pct   { display: none; }
 
 .tbi-funnel-connector {
@@ -382,31 +442,30 @@ header[data-testid="stHeader"] { background: transparent; }
     padding: 0;
     position: relative;
     z-index: 5;
-    gap: 6px;
+    gap: 5px;
     flex-wrap: wrap;
     direction: ltr;
     margin-top: -6px;
     margin-bottom: -6px;
-    min-height: 24px;
+    min-height: 22px;
 }
 .tbi-connector-badge {
     font-family: 'IBM Plex Sans', sans-serif;
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 600;
-    color: #334155;
+    color: #475569;
     background: #FFFFFF;
     border: 1px solid #E2E8F0;
     border-radius: 100px;
-    padding: 3px 10px;
+    padding: 2px 9px;
     letter-spacing: 0.3px;
-    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
     display: inline-flex;
     align-items: center;
     gap: 5px;
 }
 .tbi-connector-badge .tbi-cb-dot {
-    width: 7px;
-    height: 7px;
+    width: 6px;
+    height: 6px;
     border-radius: 50%;
     display: inline-block;
     flex-shrink: 0;
@@ -417,29 +476,6 @@ header[data-testid="stHeader"] { background: transparent; }
     font-weight: 500;
     color: #64748B;
 }
-
-/* ---------- Auth login card ---------- */
-.tbi-auth-card {
-    background: #FFFFFF;
-    border: 1px solid #E2E8F0;
-    border-radius: 16px;
-    padding: 2rem 2rem 1rem 2rem;
-    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06);
-    margin-top: 4rem;
-    text-align: center;
-}
-.tbi-auth-title {
-    font-size: 1.6rem;
-    font-weight: 700;
-    color: #0F172A;
-    letter-spacing: -0.02em;
-    margin-bottom: 0.25rem;
-}
-.tbi-auth-subtitle {
-    font-size: 0.9rem;
-    color: #64748B;
-    margin-bottom: 0.5rem;
-}
 </style>
 """
 
@@ -449,11 +485,7 @@ def apply_page_style() -> None:
 
 
 def _logo_data_uri(logo_path: Path) -> str | None:
-    """Read the SVG and return a base64-encoded data URI for use in <img src=...>.
-
-    Embedding as a data URI (rather than serving via Streamlit's static file
-    server) keeps things self-contained and avoids a separate HTTP fetch.
-    """
+    """Read the SVG and return a base64 data URI for use in an img src attribute."""
     try:
         raw = logo_path.read_bytes()
     except OSError:
@@ -463,7 +495,6 @@ def _logo_data_uri(logo_path: Path) -> str | None:
 
 
 def render_sidebar_logo(logo_path: Path | None, brand_name: str) -> None:
-    """Render the logo at the top of the sidebar."""
     if logo_path and logo_path.is_file():
         uri = _logo_data_uri(logo_path)
         if uri:
@@ -474,17 +505,15 @@ def render_sidebar_logo(logo_path: Path | None, brand_name: str) -> None:
                 unsafe_allow_html=True,
             )
             return
-    # Fallback: text wordmark.
     st.sidebar.markdown(
         f'<div class="tbi-sidebar-brand">'
-        f'<div style="font-size:1.2rem;font-weight:700;color:#0F172A;">{brand_name}</div>'
+        f'<div style="font-size:1.1rem;font-weight:700;color:#0F172A;">{brand_name}</div>'
         f"</div>",
         unsafe_allow_html=True,
     )
 
 
 def render_landing_logo(logo_path: Path | None) -> None:
-    """Render a larger version of the logo on the landing screen."""
     if not (logo_path and logo_path.is_file()):
         return
     uri = _logo_data_uri(logo_path)
@@ -500,15 +529,15 @@ def render_landing_logo(logo_path: Path | None) -> None:
 
 def render_app_header(title: str, subtitle: str | None = None) -> None:
     subtitle_html = (
-        f'<div style="color:#64748B; font-size:1rem; margin-top:0.25rem; text-align:center;">{subtitle}</div>'
+        f'<div style="color:#64748B; font-size:0.85rem; margin-top:0.25rem; text-align:center;">{subtitle}</div>'
         if subtitle
         else ""
     )
     st.markdown(
         f"""
-        <div style="margin-bottom: 1.5rem; text-align: center;">
+        <div style="margin-bottom: 1.25rem; text-align: center;">
           <div style="
-              font-size: 2rem;
+              font-size: 1.5rem;
               font-weight: 700;
               color: #0F172A;
               letter-spacing: -0.02em;
