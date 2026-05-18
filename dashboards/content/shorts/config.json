@@ -38,6 +38,24 @@
     ],
     [
       {
+        "type": "line",
+        "title": "Impressions rate by site",
+        "subtitle": "(natives + bumpers) / total plays",
+        "transform": {
+          "x": "date",
+          "y_expr": {
+            "ratio": {
+              "numerator": { "sum": ["natives", "bumpers"] },
+              "denominator": "plays"
+            }
+          },
+          "y_label": "impressions_rate",
+          "series": "site"
+        }
+      }
+    ],
+    [
+      {
         "type": "shorts_funnel",
         "title": "Shorts funnel",
         "subtitle": "From all plays through to impressions, per site"
