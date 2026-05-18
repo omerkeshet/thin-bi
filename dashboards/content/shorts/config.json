@@ -1,6 +1,8 @@
 {
   "title": "Shorts Performance",
   "department_title": "Content",
+  "department_icon": "play",
+  "icon": "video",
   "description": "Daily Shorts plays across sites.",
   "filters": [
     { "type": "date_range", "column": "date", "label": "Date range" },
