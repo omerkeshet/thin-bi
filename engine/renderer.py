@@ -1,5 +1,5 @@
 """
-Layout renderer + chart factory.
+Layout renderer + chart factory (ECharts for bars, custom HTML for funnel).
 """
 
 from __future__ import annotations
@@ -8,17 +8,17 @@ import html
 from typing import Any
 
 import pandas as pd
-import plotly.express as px
 import streamlit as st
+from streamlit_echarts import JsCode, st_echarts
 
 from engine.dashboard_registry import Dashboard
 from engine.data_loader import load_dashboard_data
 from engine.filters import render_filters
 from engine.funnel import compute_shorts_funnel, FunnelStep
-from theme.plotly_theme import apply_chart_polish, format_number
+from theme.echarts_theme import PALETTE, apply_theme, format_number
 
 
-CHART_HEIGHT = 380
+CHART_HEIGHT_PX = 360
 
 
 # ---------------------------------------------------------------------------
@@ -38,13 +38,8 @@ SITE_TEXT_COLORS: dict[str, str] = {
 SITE_ORDER = ["v1", "mako", "n12"]
 
 
-def _site_color_map(sites: list[str]) -> dict[str, str]:
-    out: dict[str, str] = {}
-    for s in sites:
-        key = str(s).strip().lower()
-        if key in SITE_BRAND_COLORS:
-            out[str(s)] = SITE_BRAND_COLORS[key]
-    return out
+def _site_color_for(site: str) -> str | None:
+    return SITE_BRAND_COLORS.get(str(site).strip().lower())
 
 
 def _site_text_color(site: str) -> str:
@@ -68,12 +63,20 @@ def _site_order_for(values: list[str]) -> list[str]:
 # ---------------------------------------------------------------------------
 
 def render_dashboard(dashboard: Dashboard) -> None:
-    st.title(dashboard.dashboard_title)
-    st.caption(f"{dashboard.department_title} · `{dashboard.key}`")
+    st.markdown(
+        f'<div class="tbi-page-header">'
+        f'<div class="tbi-page-title">{html.escape(dashboard.dashboard_title)}</div>'
+        f'<div class="tbi-page-meta">{html.escape(dashboard.department_title)}</div>'
+        f"</div>",
+        unsafe_allow_html=True,
+    )
 
     description = dashboard.config.get("description")
     if description:
-        st.write(description)
+        st.markdown(
+            f'<div class="tbi-page-description">{html.escape(description)}</div>',
+            unsafe_allow_html=True,
+        )
 
     with st.spinner("Loading data..."):
         try:
@@ -88,7 +91,6 @@ def render_dashboard(dashboard: Dashboard) -> None:
         st.info("Query returned no rows.")
         return
 
-    # Filters
     filter_defs = dashboard.config.get("filters") or []
     df = render_filters(df, filter_defs, dashboard_key=dashboard.key)
 
@@ -107,7 +109,7 @@ def render_dashboard(dashboard: Dashboard) -> None:
         if not isinstance(row, list) or not row:
             st.warning(f"Layout row #{row_idx} is empty or malformed.")
             continue
-        cols = st.columns(len(row), gap="medium")
+        cols = st.columns(len(row), gap="small")
         for col, viz in zip(cols, row):
             with col:
                 _render_viz(df, viz)
@@ -147,7 +149,7 @@ def _close_card() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Bar chart
+# Bar chart (ECharts)
 # ---------------------------------------------------------------------------
 
 def _resolve_measure(
@@ -197,6 +199,15 @@ def _is_date_like(series: pd.Series) -> bool:
     return hasattr(val, "year") and hasattr(val, "month") and hasattr(val, "day")
 
 
+def _format_x_value(v: Any, x_is_date: bool) -> str:
+    if x_is_date:
+        ts = pd.to_datetime(v, errors="coerce")
+        if pd.isna(ts):
+            return str(v)
+        return ts.strftime("%b %d")
+    return str(v)
+
+
 def _render_bar(
     df: pd.DataFrame,
     viz: dict[str, Any],
@@ -207,7 +218,7 @@ def _render_bar(
     transform = viz.get("transform") or {}
     x = transform.get("x")
     aggfunc = transform.get("aggfunc", "sum")
-    series = transform.get("series")
+    series_col = transform.get("series")
     barmode = transform.get("barmode", "group")
     stack_order = transform.get("stack_order")
 
@@ -217,8 +228,8 @@ def _render_bar(
     if x not in df.columns:
         st.warning(f"Bar viz {title!r}: column `{x}` not found.")
         return
-    if series and series not in df.columns:
-        st.warning(f"Bar viz {title!r}: series column `{series}` not found.")
+    if series_col and series_col not in df.columns:
+        st.warning(f"Bar viz {title!r}: series column `{series_col}` not found.")
         return
 
     measure = _resolve_measure(df, transform, title)
@@ -227,75 +238,125 @@ def _render_bar(
     measure_series, measure_label = measure
 
     work = pd.DataFrame({x: df[x].values})
-    if series:
-        work[series] = df[series].values
+    if series_col:
+        work[series_col] = df[series_col].values
     work[measure_label] = measure_series.values
 
-    group_cols = [x] + ([series] if series else [])
+    group_cols = [x] + ([series_col] if series_col else [])
     agg = (
         work.groupby(group_cols, dropna=False)[measure_label]
         .agg(aggfunc)
         .reset_index()
     )
+    agg = agg.sort_values(by=group_cols)
 
-    category_orders: dict[str, list] | None = None
-    color_map: dict[str, str] | None = None
+    x_is_date = _is_date_like(agg[x])
+    x_values_raw = list(agg[x].drop_duplicates().tolist())
+    x_categories = [_format_x_value(v, x_is_date) for v in x_values_raw]
 
-    if series:
-        unique_series = agg[series].astype(str).unique().tolist()
-        if series == "site":
-            category_orders = {series: _site_order_for(unique_series)}
-            color_map = _site_color_map(unique_series)
+    # Build series list.
+    series_list: list[dict[str, Any]] = []
+    if series_col:
+        unique_series = agg[series_col].astype(str).unique().tolist()
+        if series_col == "site":
+            ordered_series = _site_order_for(unique_series)
         elif stack_order == "sum_desc":
             totals = (
-                agg.groupby(series, dropna=False)[measure_label]
+                agg.groupby(series_col, dropna=False)[measure_label]
                 .sum()
                 .sort_values(ascending=False)
             )
-            category_orders = {series: totals.index.tolist()}
+            ordered_series = totals.index.astype(str).tolist()
+        else:
+            ordered_series = sorted(unique_series)
 
-    agg = agg.sort_values(by=group_cols)
-    x_is_date = _is_date_like(agg[x])
-
-    fig = px.bar(
-        agg,
-        x=x,
-        y=measure_label,
-        color=series if series else None,
-        barmode=barmode if series else "relative",
-        title=None,
-        category_orders=category_orders,
-        color_discrete_map=color_map,
-        height=CHART_HEIGHT,
-    )
-
-    if series:
-        fig.update_traces(
-            hovertemplate=(
-                f"<b>%{{fullData.name}}</b><br>"
-                f"{x}: %{{x}}<br>"
-                f"{measure_label}: %{{y:,.0f}}"
-                "<extra></extra>"
-            )
-        )
+        # Plot order for stacks: ECharts stacks bottom-to-top in the order
+        # series are added. Largest goes first (bottom).
+        for series_name in ordered_series:
+            sub = agg[agg[series_col].astype(str) == str(series_name)]
+            value_lookup = dict(zip(sub[x].tolist(), sub[measure_label].tolist()))
+            data = [
+                float(value_lookup.get(xv, 0) or 0) for xv in x_values_raw
+            ]
+            color = _site_color_for(series_name) if series_col == "site" else None
+            entry = {
+                "name": str(series_name),
+                "type": "bar",
+                "data": data,
+                "barMaxWidth": 40,
+                "emphasis": {"focus": "series"},
+                "itemStyle": {"borderRadius": [2, 2, 0, 0]},
+            }
+            if barmode == "stack":
+                entry["stack"] = "total"
+            if color:
+                entry["itemStyle"]["color"] = color
+            series_list.append(entry)
     else:
-        fig.update_traces(
-            hovertemplate=(
-                f"{x}: %{{x}}<br>"
-                f"{measure_label}: %{{y:,.0f}}"
-                "<extra></extra>"
-            )
-        )
+        data = [float(v or 0) for v in agg[measure_label].tolist()]
+        series_list.append({
+            "name": measure_label,
+            "type": "bar",
+            "data": data,
+            "barMaxWidth": 40,
+            "itemStyle": {
+                "color": PALETTE[0],
+                "borderRadius": [2, 2, 0, 0],
+            },
+            "emphasis": {"focus": "series"},
+        })
 
-    apply_chart_polish(fig, x_is_date=x_is_date)
+    # Tooltip formatter: branded, with K/M/B formatting on numeric values.
+    tooltip_formatter = JsCode("""
+        function (params) {
+            if (!params || !params.length) return '';
+            var fmt = function (n) {
+                var a = Math.abs(n);
+                if (a >= 1e9) return (n/1e9).toFixed(2)+'B';
+                if (a >= 1e6) return (n/1e6).toFixed(2)+'M';
+                if (a >= 1e3) return (n/1e3).toFixed(2)+'K';
+                return Number(n).toLocaleString();
+            };
+            var header = '<div style="font-weight:600;color:#0F172A;margin-bottom:4px;">'
+                       + params[0].axisValueLabel + '</div>';
+            var rows = params.map(function (p) {
+                return '<div style="display:flex;align-items:center;gap:6px;'
+                     + 'font-size:12px;color:#475569;line-height:1.6;">'
+                     + '<span style="width:8px;height:8px;border-radius:50%;'
+                     + 'background:' + p.color + ';display:inline-block;"></span>'
+                     + '<span style="flex:1;">' + p.seriesName + '</span>'
+                     + '<span style="font-weight:600;color:#0F172A;">'
+                     + fmt(p.value) + '</span></div>';
+            }).join('');
+            return header + rows;
+        }
+    """).js_code
+
+    options: dict[str, Any] = {
+        "tooltip": {
+            "trigger": "axis",
+            "axisPointer": {"type": "shadow"},
+            "formatter": {"_js": tooltip_formatter},
+        },
+        "legend": {"show": bool(series_col)},
+        "xAxis": {"type": "category", "data": x_categories},
+        "yAxis": {"type": "value"},
+        "series": series_list,
+    }
+
+    options = apply_theme(options)
 
     _open_card(title=title, subtitle=subtitle)
-    st.plotly_chart(fig, use_container_width=True)
+    st_echarts(
+        options=options,
+        height=f"{CHART_HEIGHT_PX}px",
+        key=f"echart::{title}::{x}::{series_col or ''}",
+    )
     _close_card()
 
 
 # ---------------------------------------------------------------------------
-# Shorts funnel
+# Shorts funnel (unchanged HTML)
 # ---------------------------------------------------------------------------
 
 def _format_pct(current: float, previous: float) -> str:
