@@ -59,6 +59,52 @@ def _site_order_for(values: list[str]) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
+# JS formatters / tooltips (for linear charts)
+# ---------------------------------------------------------------------------
+
+_TOOLTIP_LINEAR = JsCode("""
+    function (params) {
+        if (!params || !params.length) return '';
+        var fmt = function (n) {
+            var a = Math.abs(n);
+            if (a >= 1e9) return (n/1e9).toFixed(2)+'B';
+            if (a >= 1e6) return (n/1e6).toFixed(2)+'M';
+            if (a >= 1e3) return (n/1e3).toFixed(2)+'K';
+            return Number(n).toLocaleString();
+        };
+        var header = '<div style="font-weight:600;color:#0F172A;margin-bottom:4px;">'
+                   + params[0].axisValueLabel + '</div>';
+        var rows = params.map(function (p) {
+            return '<div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#475569;line-height:1.6;">'
+                 + '<span style="width:8px;height:8px;border-radius:50%;background:' + p.color + ';display:inline-block;"></span>'
+                 + '<span style="flex:1;">' + p.seriesName + '</span>'
+                 + '<span style="font-weight:600;color:#0F172A;">' + fmt(p.value) + '</span></div>';
+        }).join('');
+        return header + rows;
+    }
+""")
+
+_TOOLTIP_PCT = JsCode("""
+    function (params) {
+        if (!params || !params.length) return '';
+        var fmt = function (n) {
+            if (n === null || n === undefined || isNaN(n)) return '—';
+            return Number(n).toFixed(2) + '%';
+        };
+        var header = '<div style="font-weight:600;color:#0F172A;margin-bottom:4px;">'
+                   + params[0].axisValueLabel + '</div>';
+        var rows = params.map(function (p) {
+            return '<div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#475569;line-height:1.6;">'
+                 + '<span style="width:8px;height:8px;border-radius:50%;background:' + p.color + ';display:inline-block;"></span>'
+                 + '<span style="flex:1;">' + p.seriesName + '</span>'
+                 + '<span style="font-weight:600;color:#0F172A;">' + fmt(p.value) + '</span></div>';
+        }).join('');
+        return header + rows;
+    }
+""")
+
+
+# ---------------------------------------------------------------------------
 # Public entry point
 # ---------------------------------------------------------------------------
 
@@ -151,7 +197,7 @@ def _close_card() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Measure resolution — handles plain columns, sums, and ratios.
+# Measure resolution
 # ---------------------------------------------------------------------------
 
 def _resolve_measure(
@@ -159,10 +205,6 @@ def _resolve_measure(
     transform: dict[str, Any],
     title: str,
 ) -> tuple[pd.Series, str, str] | None:
-    """
-    Returns (series, label, scale) where scale is "linear" or "percent".
-    The scale informs y-axis formatting.
-    """
     y_expr = transform.get("y_expr")
     if y_expr and isinstance(y_expr, dict):
         if "sum" in y_expr:
@@ -183,20 +225,7 @@ def _resolve_measure(
             return series, label, "linear"
 
         if "ratio" in y_expr:
-            # Ratios are special: they don't make sense at the row level
-            # before grouping. We mark the series as "needs post-aggregation"
-            # by returning a (numerator, denominator) pair via a tuple-typed
-            # series. But that's awkward. Cleaner: handle ratios in the
-            # render path itself by computing numerator/denominator
-            # separately and dividing AFTER groupby.
-            #
-            # We signal this by returning a sentinel — the caller checks
-            # for `y_expr.ratio` and takes the ratio code path.
-            st.warning(
-                f"Viz {title!r}: `y_expr.ratio` must be handled by the renderer, "
-                "not _resolve_measure. This is a bug if you see it."
-            )
-            return None
+            return None  # caller must take the ratio code path
 
         st.warning(f"Viz {title!r}: unsupported `y_expr` shape: {y_expr}")
         return None
@@ -217,12 +246,6 @@ def _resolve_sum_expr(
     expr: Any,
     title: str,
 ) -> pd.Series | None:
-    """
-    Helper used by ratio measures. Accepts either:
-      - a column name string ("plays")           -> df["plays"]
-      - a dict {"sum": ["natives", "bumpers"]}   -> df[["natives","bumpers"]].sum(axis=1)
-    Returns a pandas Series suitable for groupby-then-sum.
-    """
     if isinstance(expr, str):
         if expr not in df.columns:
             st.warning(f"Viz {title!r}: column `{expr}` not found in ratio.")
@@ -282,60 +305,6 @@ def _ordered_series_values(
         )
         return totals.index.astype(str).tolist()
     return sorted(unique)
-
-
-# JS formatters used in tooltip / axis labels.
-_FMT_K_M_B = (
-    "function (v) {"
-    "  var a = Math.abs(v);"
-    "  if (a >= 1e9) return (v/1e9).toFixed(2)+'B';"
-    "  if (a >= 1e6) return (v/1e6).toFixed(2)+'M';"
-    "  if (a >= 1e3) return (v/1e3).toFixed(1)+'K';"
-    "  return v;"
-    "}"
-)
-_FMT_PERCENT = (
-    "function (v) { return (v*100).toFixed(1) + '%'; }"
-)
-_TOOLTIP_LINEAR = """
-    function (params) {
-        if (!params || !params.length) return '';
-        var fmt = function (n) {
-            var a = Math.abs(n);
-            if (a >= 1e9) return (n/1e9).toFixed(2)+'B';
-            if (a >= 1e6) return (n/1e6).toFixed(2)+'M';
-            if (a >= 1e3) return (n/1e3).toFixed(2)+'K';
-            return Number(n).toLocaleString();
-        };
-        var header = '<div style="font-weight:600;color:#0F172A;margin-bottom:4px;">'
-                   + params[0].axisValueLabel + '</div>';
-        var rows = params.map(function (p) {
-            return '<div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#475569;line-height:1.6;">'
-                 + '<span style="width:8px;height:8px;border-radius:50%;background:' + p.color + ';display:inline-block;"></span>'
-                 + '<span style="flex:1;">' + p.seriesName + '</span>'
-                 + '<span style="font-weight:600;color:#0F172A;">' + fmt(p.value) + '</span></div>';
-        }).join('');
-        return header + rows;
-    }
-"""
-_TOOLTIP_PERCENT = """
-    function (params) {
-        if (!params || !params.length) return '';
-        var fmt = function (n) {
-            if (n === null || n === undefined || isNaN(n)) return '—';
-            return (n*100).toFixed(2) + '%';
-        };
-        var header = '<div style="font-weight:600;color:#0F172A;margin-bottom:4px;">'
-                   + params[0].axisValueLabel + '</div>';
-        var rows = params.map(function (p) {
-            return '<div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#475569;line-height:1.6;">'
-                 + '<span style="width:8px;height:8px;border-radius:50%;background:' + p.color + ';display:inline-block;"></span>'
-                 + '<span style="flex:1;">' + p.seriesName + '</span>'
-                 + '<span style="font-weight:600;color:#0F172A;">' + fmt(p.value) + '</span></div>';
-        }).join('');
-        return header + rows;
-    }
-"""
 
 
 # ---------------------------------------------------------------------------
@@ -424,7 +393,7 @@ def _render_bar(
         "tooltip": {
             "trigger": "axis",
             "axisPointer": {"type": "shadow"},
-            "formatter": {"_js": _TOOLTIP_LINEAR},
+            "formatter": _TOOLTIP_LINEAR,
         },
         "legend": {"show": bool(series_col)},
         "xAxis": {"type": "category", "data": x_categories},
@@ -443,7 +412,7 @@ def _render_bar(
 
 
 # ---------------------------------------------------------------------------
-# Line chart — handles both sum measures and ratio measures.
+# Line chart — handles sum measures and ratio measures (percent-formatted).
 # ---------------------------------------------------------------------------
 
 def _render_line(
@@ -468,13 +437,11 @@ def _render_line(
         st.warning(f"Line viz {title!r}: series column `{series_col}` not found.")
         return
 
-    # Detect ratio vs plain measure.
     y_expr = transform.get("y_expr")
     is_ratio = isinstance(y_expr, dict) and "ratio" in y_expr
     measure_label = transform.get("y_label") or "value"
     scale = "linear"
 
-    # Build the working frame with whatever columns we need to aggregate.
     if is_ratio:
         ratio = y_expr["ratio"]
         if not isinstance(ratio, dict) or "numerator" not in ratio or "denominator" not in ratio:
@@ -496,7 +463,8 @@ def _render_line(
 
         group_cols = [x] + ([series_col] if series_col else [])
         grouped = work.groupby(group_cols, dropna=False)[["__num", "__den"]].sum().reset_index()
-        # Compute ratio after summing — avoids the "mean of ratios" trap.
+        # Multiply by 100 so the value is already in "percent units"
+        # (e.g. 38.3, not 0.383). ECharts axis/tooltip just need to append '%'.
         grouped[measure_label] = grouped.apply(
             lambda r: (r["__num"] / r["__den"] * 100) if r["__den"] != 0 else 0,
             axis=1,
@@ -562,30 +530,29 @@ def _render_line(
             "areaStyle": {"opacity": 0.08, "color": PALETTE[0]},
         })
 
+    # Y axis + tooltip — percent path uses pure string formatters (no JS),
+    # because data is already in "38.3" units.
     if scale == "percent":
-        # Data is already in percent units (e.g. 38.3, not 0.383).
-        # ECharts string formatters: '{value}%' works without JS.
-        y_axis = {
+        y_axis: dict[str, Any] = {
             "type": "value",
             "axisLabel": {"formatter": "{value}%"},
             "min": 0,
         }
-        tooltip_fmt = "{a}: {c}%"  # series name : value %
-    else:
-        y_axis = {"type": "value"}
-        tooltip_fmt = _TOOLTIP_LINEAR
-
-if scale == "percent":
-        tooltip_opt = {
+        tooltip_opt: dict[str, Any] = {
             "trigger": "axis",
             "axisPointer": {"type": "line"},
-            "valueFormatter": "{value}%",  # not always honored
+            "valueFormatter": JsCode(
+                "function(v){ "
+                "if (v===null||v===undefined||isNaN(v)) return '—'; "
+                "return Number(v).toFixed(2)+'%'; }"
+            ),
         }
     else:
+        y_axis = {"type": "value"}
         tooltip_opt = {
             "trigger": "axis",
             "axisPointer": {"type": "line"},
-            "formatter": tooltip_fmt,  # JsCode for linear
+            "formatter": _TOOLTIP_LINEAR,
         }
 
     options: dict[str, Any] = {
